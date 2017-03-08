@@ -3,3 +3,5 @@ sample_data/
 script_experiments/
 csv_mesh_importer_v0_7_alpha4/
 blender_python_reference_2_78a_release/
+*.blend
+*.blend1
