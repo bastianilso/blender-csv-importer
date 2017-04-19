@@ -26,8 +26,6 @@ import bmesh
 from math import radians, degrees
 from mathutils import Vector
 
-redraw = 0
-
 class DataStorage():
     
     data = None
@@ -45,7 +43,6 @@ class DataStorage():
         # Append values from each parsed row into the array.
         for (j,v) in enumerate(row):
             self.data[j].append(float(v))
-            print(v)
     
     def get_columns(self):
         return self.data
@@ -82,7 +79,7 @@ class DataStorage():
                                 
         total = sum(c for c in cate_count)   
         for i in range(len(cate_count)):
-            print(str(cate_count[i] / total) + "%")
+            #print(str(cate_count[i] / total) + "%")
             cate_count[i] = cate_count[i] / total
             if (output_type == 'DEGREES'):
                 cate_count[i] = round(cate_count[i] * 360,2)
@@ -124,7 +121,7 @@ class HistogramVisualizer():
         # TODO: Detect whether column is string or numerical
         # TODO: if non-numeric: count the amount of identical values.
         categories, cate_count = self.dataStore.get_frequencies(column,split,'PERCENTAGE')
-        print(str(cate_count))
+        #print(str(cate_count))
         
         # Create  pie pieces for each category
         # Create labels to put next to the pie pieces
@@ -162,7 +159,6 @@ class HistogramVisualizer():
 
     def animate_objects(self):
         print("running animate_objects..")  
-        print("running animate_objects..")             
 
         duration = self.props.duration
         objects = self.bl_objects
@@ -280,7 +276,7 @@ class PieVisualizer():
         split = self.props.split
         column = self.props.column -1
         categories, cate_count = self.dataStore.get_frequencies(column,split,'DEGREES')
-        print(str(cate_count))
+        #print(str(cate_count))
         # Create  pie pieces for each category
         # Create labels to put next to the pie pieces
         rotation = 0
@@ -357,7 +353,6 @@ class PieVisualizer():
 
 
     def draw(self, layout, context):
-        print("bla!")
         layout.label("test")
         box = layout.box()
         props = context.scene.import_csv.visprops
@@ -473,7 +468,7 @@ class ScatterVisualizer():
 class CSVReader():
 
     filepath = None
-    delimiter = ','
+    delimiter = ''
     quotechar = '"'
     __headers = None
 
@@ -483,10 +478,23 @@ class CSVReader():
         # detect quotechar
         # detect_labels
 
-    def __detect_delimiter(self):
-        self.delimiter = ','
-        # does the file contain tabs? then return a string with 'TAB'
-        # otherwise, assume delimiter is comma
+    def __detect_delimiter(self, f):
+        commacount = 0
+        semicommacount = 0
+        tabcount = 0
+        for (i,line) in enumerate(f):
+            commacount += line.count(',')
+            semicommacount += line.count(';')
+            tabcount += line.count('\t')
+            if (i == 5):
+                break
+        
+        if (commacount > semicommacount and commacount > tabcount):
+            self.delimiter = ','
+        if (semicommacount > commacount and semicommacount > tabcount):
+            self.delimiter = ';'
+        if (tabcount > commacount and tabcount > semicommacount):
+            self.delimiter = '\t'
 
     def __detect_quotechar(self):
         self.quotechar = '"'
@@ -503,7 +511,8 @@ class CSVReader():
     def parse_csv(self, context, filepath):
         print("running parse_csv...")
         f = open(filepath, 'r', encoding='utf-8')
-        reader = csv.reader(f, delimiter=',', quotechar='"')
+        self.__detect_delimiter(f)
+        reader = csv.reader(f, delimiter=self.delimiter, quotechar='"')
         # TODO: Come up with a way to detect and skip possible headers using this.
         #if (headers):
             #reader.__next__()
