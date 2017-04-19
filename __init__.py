@@ -469,7 +469,7 @@ class CSVReader():
 
     filepath = None
     delimiter = ''
-    quotechar = '"'
+    quotechar = ''
     __headers = None
 
     def __init__(self, f):
@@ -482,11 +482,12 @@ class CSVReader():
         commacount = 0
         semicommacount = 0
         tabcount = 0
+        f.seek(0)
         for (i,line) in enumerate(f):
             commacount += line.count(',')
             semicommacount += line.count(';')
             tabcount += line.count('\t')
-            if (i == 5):
+            if (i == 20):
                 break
         
         if (commacount > semicommacount and commacount > tabcount):
@@ -496,10 +497,22 @@ class CSVReader():
         if (tabcount > commacount and tabcount > semicommacount):
             self.delimiter = '\t'
 
-    def __detect_quotechar(self):
-        self.quotechar = '"'
-        # detect quotechar based on frequency of either ' or "
-        # if none, then fallback to " (it wouldnt matter then)
+    def __detect_quotechar(self,f):
+        quotecount = 0
+        singlequotecount = 0
+        f.seek(0)
+        for (i,line) in enumerate(f):
+            quotecount += line.count('"')
+            singlequotecount += line.count("'")
+            if (i == 20):
+                break
+            
+        print('quotecount ' + str(quotecount))
+        print('singlequotecount ' + str(singlequotecount))
+        if (singlequotecount > quotecount):
+            self.quotechar = "'"
+        else:
+            self.quotechar = '"'
 
     def __detect_labels(self):
         self.__headers = None
@@ -512,7 +525,9 @@ class CSVReader():
         print("running parse_csv...")
         f = open(filepath, 'r', encoding='utf-8')
         self.__detect_delimiter(f)
-        reader = csv.reader(f, delimiter=self.delimiter, quotechar='"')
+        self.__detect_quotechar(f)
+        f.seek(0)
+        reader = csv.reader(f, delimiter=self.delimiter, quotechar=self.quotechar)
         # TODO: Come up with a way to detect and skip possible headers using this.
         #if (headers):
             #reader.__next__()
@@ -521,6 +536,7 @@ class CSVReader():
         columns = []
         dataStore = DataStorage()
         for (i, row) in enumerate(reader):
+            print(row)
             dataStore.add_row(row)
 
         # you can access the data using dataStore.get_rows()[x,y]
