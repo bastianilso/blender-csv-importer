@@ -50,9 +50,46 @@ class DataStorage():
     def get_columns(self):
         return self.data
     
-    #def get_rows(self):
-        # define a new dataset which is an array of rows.
-        # 
+    def get_frequencies(self, column, split, output_type):
+        # TODO: Detect whether column is string or numerical
+        # TODO: if non-numeric: count the amount of identical values.
+        data = self.data
+        max_value = max(data[column])
+        min_value = min(data[column])
+        data_range = max_value - min_value
+        divide = data_range / split
+        categories = []
+        cate_count = []
+
+        for i in range(0, split):            
+            # Calculate lowest value and highest value for each category
+            # Rounding to 2 decimals fixes some gaps (but not all..)
+            lv = min_value + (divide * i)
+            hv = min_value + (divide * (i+1))
+
+            # Create category name
+            categories.append(str('{0:.2f}'.format(lv)) + ' - ' + str('{0:.2f}'.format(hv)))      
+            
+            # initialize cate_counts
+            cate_count.append(0)
+            
+            # Find numbers which fit in category.
+            for j in range(len(data[column])):
+                v = data[column][j]
+                if (v <= hv and v >= lv):
+                    cate_count[i] += 1
+            #print("category: " + categories[i] + ", cate_count is: " + str(cate_count[i]))
+                                
+        total = sum(c for c in cate_count)   
+        for i in range(len(cate_count)):
+            print(str(cate_count[i] / total) + "%")
+            cate_count[i] = cate_count[i] / total
+            if (output_type == 'DEGREES'):
+                cate_count[i] = round(cate_count[i] * 360,2)
+
+        return (categories, cate_count)
+
+
         
 # TODO: Define toString method
 
@@ -65,10 +102,127 @@ class HistogramVisualizer():
     props = None
 
     def visualize(self, dataStorage):
-        print("visualize!")
+        self.dataStore = dataStorage
+        self.props = bpy.context.scene.import_csv.visprops
+        self.bl_objects = self.create_blender_objects()
+        if (self.props.use_animate):
+            self.animate_objects()
+
+    def block_scale(self, block, percentage):
+        # Set origin to the bottom
+        # Scale along y-axis by percentage
+        return block
+    
+
+    def create_blender_objects(self):
+        print("create_blender_objects..")
+
+        objects = []
+        split = self.props.split
+        column = self.props.column -1
+        offset = 1
+        # TODO: Detect whether column is string or numerical
+        # TODO: if non-numeric: count the amount of identical values.
+        categories, cate_count = self.dataStore.get_frequencies(column,split,'PERCENTAGE')
+        print(str(cate_count))
+        
+        # Create  pie pieces for each category
+        # Create labels to put next to the pie pieces
+        location_x = 0
+        for i in range(len(categories)):
+            # Create pie chart
+            bpy.ops.object.select_all(action='DESELECT')
+            bpy.context.scene.objects.active = None
+            bpy.ops.mesh.primitive_plane_add(radius=0.5, location=(0, 0, 0))
+            ob = bpy.context.object
+            ob.name ="block" + str(categories[i])
+            bpy.context.scene.cursor_location = (0,-0.5,0)
+            bpy.ops.object.origin_set(type='ORIGIN_CURSOR')
+            ob.scale = (ob.scale.x * 0.35,ob.scale.y * cate_count[i], ob.scale.z)
+            bpy.ops.object.transform_apply(scale=True)
+            ob.location.x = location_x
+            
+            # Create labels
+            bpy.ops.object.select_all(action='DESELECT')
+            bpy.context.scene.objects.active = None
+            bpy.ops.object.text_add(location=(location_x, -0.7, 0))
+            text = bpy.context.object
+            text.data.align_x = 'CENTER'
+            text.scale = (text.scale.x * 0.15,text.scale.y * 0.15, text.scale.z * 0.15)
+            text.name ="label" + str(categories[i])
+            text.data.body = categories[i]
+            
+            objects.append(ob)
+            objects.append(text)
+            
+            location_x += offset
+
+        return objects
+        
+
+    def animate_objects(self):
+        print("running animate_objects..")  
+        print("running animate_objects..")             
+
+        duration = self.props.duration
+        objects = self.bl_objects
+        
+        # Specify an offset
+        offset = 1
+
+        # calculated length of animation per object.
+        animate = duration - (offset * len(objects))
+        
+        # Store the current frame so we can restore current frame state later.
+        startFrame = bpy.context.scene.frame_current
+        
+        print ("duration in frames: " + str(duration))
+        print("amount of objects: " + str(len(objects)))
+        print("offset per object: " + str(offset))
+        print("animate per object: " + str(animate))
+
+        # Iterate over each data point and animate it.
+        for (i, ob) in enumerate(objects):
+            print("----")
+            print("current frame is: " + str(bpy.context.scene.frame_current))
+            print("current offset is: " + str(offset))
+            print("current duration is: " + str(animate))
+            print("start frame is: " + str(bpy.context.scene.frame_current))
+            print("end frame is: " + str(bpy.context.scene.frame_current + animate))
+            
+            bpy.context.scene.frame_current += animate
+            ob.keyframe_insert(data_path="scale", index=-1)
+
+            # Insert middle keyframe
+            bpy.context.scene.frame_current -= int(animate / 2)
+            ob.scale = (ob.scale.x,ob.scale.y*1.5,ob.scale.z)
+            ob.keyframe_insert(data_path="scale", index=-1)
+
+            # Insert start keyframe
+            bpy.context.scene.frame_current -= int(animate / 2)
+            ob.scale = (ob.scale.x,0,ob.scale.z)
+            ob.keyframe_insert(data_path="scale", index=-1)
+            
+            # Offset the next object animation
+            bpy.context.scene.frame_current += offset
+
+        # Restore frame state    
+        bpy.context.scene.frame_current = startFrame
+
+
     
     def draw(self, layout, context):
-        print("bla!")
+        layout.label("test")
+        box = layout.box()
+        props = context.scene.import_csv.visprops
+        scene = context.scene
+        
+        box.prop(props, 'column')
+        box.prop(props, 'split')
+        box.prop(props, 'use_animate')
+        if (props.use_animate):
+            box.prop(props, 'duration')
+            
 
 class PieVisualizer():
 
@@ -109,7 +263,6 @@ class PieVisualizer():
         
         bm.to_mesh(mesh)
         bm.free()
-        return circle
 
     def set_text_labels(self, ob, label, min_rot, max_rot):
             ob.data.align_x = 'CENTER'
@@ -124,43 +277,10 @@ class PieVisualizer():
         print("create_blender_objects..")
 
         objects = []
-        data = self.dataStore.get_columns()
         split = self.props.split
         column = self.props.column -1
-        # TODO: Detect whether column is string or numerical
-        # TODO: if non-numeric: count the amount of identical values.
-        
-        max_value = max(data[column])
-        min_value = min(data[column])
-        data_range = max_value - min_value
-        divide = data_range / split
-        categories = []
-        cate_count = []
-
-        for i in range(0, split):            
-            # Calculate lowest value and highest value for each category
-            # Rounding to 2 decimals fixes some gaps (but not all..)
-            lv = min_value + (divide * i)
-            hv = min_value + (divide * (i+1))
-
-            # Create category name
-            categories.append(str('{0:.2f}'.format(lv)) + ' - ' + str('{0:.2f}'.format(hv)))      
-            
-            # initialize cate_counts
-            cate_count.append(0)
-            
-            # Find numbers which fit in category.
-            for j in range(len(data[column])):
-                v = data[column][j]
-                if (v <= hv and v >= lv):
-                    cate_count[i] += 1
-            #print("category: " + categories[i] + ", cate_count is: " + str(cate_count[i]))
-                                
-        total = sum(c for c in cate_count)   
-        for i in range(len(cate_count)):
-            print(str(cate_count[i] / total) + "%")
-            cate_count[i] = round((cate_count[i] / total) * 360)
-        
+        categories, cate_count = self.dataStore.get_frequencies(column,split,'DEGREES')
+        print(str(cate_count))
         # Create  pie pieces for each category
         # Create labels to put next to the pie pieces
         rotation = 0
