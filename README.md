@@ -2,9 +2,9 @@
 Import statistical data (.csv) into Blender.
 
 ## Current Status
-Support is limited to the following:
+Supports the following:
  * .csv files delimited by comma, semi-colon or tab
- * numerical data only (can detect headers)
- * Scatterplot (first three columns), Pie chart and histogram support
+ * reads numeric and non-numerical data (with or without headers)
+  * Scatterplot only numeric and only first three columns
 
 Licensed under GPL 3.0

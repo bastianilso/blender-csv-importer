@@ -25,7 +25,7 @@ import csv
 import bmesh
 from math import radians, degrees
 from mathutils import Vector
-
+from collections import Counter
 
 class Utils():
 
@@ -64,8 +64,22 @@ class DataStorage():
     
     def get_columns(self):
         return self.data
-    
-    def get_frequencies(self, column, split, output_type):
+
+    def get_string_frequencies(self, column):
+        data = self.data
+        categories = []
+        cate_count = []
+        
+        cnt = Counter()
+        for word in data[column]:
+            cnt[word] += 1
+        
+        categories = list(cnt.keys())
+        cate_count = list(cnt.values())
+            
+        return (cate_count, categories)     
+            
+    def get_numeric_frequencies(self, column, split):
         # TODO: Detect whether column is string or numerical
         # TODO: if non-numeric: count the amount of identical values.
         data = self.data
@@ -104,6 +118,20 @@ class DataStorage():
 
         return (cate_count, categories)
 
+    def get_frequencies(self, column, output_type, split=None):
+        utils = Utils()
+        data = self.data
+        cate_count = []
+        categories = []
+        print(data[column][0])
+        print(utils.is_number(data[column][0]))
+        if (utils.is_number(data[column][0])):
+            cate_count, categories = self.get_numeric_frequencies(column, split)
+            print('detected as numbers')
+        else:
+            cate_count, categories = self.get_string_frequencies(column)
+        
+        return (cate_count, categories)
 
         
 # TODO: Define toString method
@@ -140,8 +168,8 @@ class HistogramVisualizer():
         # TODO: Detect whether column is string or numerical
         # TODO: if non-numeric: count the amount of identical values.
         cate_count, categories = self.dataStore.get_frequencies(column,split,'PERCENTAGE')
-        #print(str(cate_count))
-
+        print(str(cate_count))
+        print(str(categories))
         objects = []
 
         # Create visualization title
