@@ -26,9 +26,22 @@ import bmesh
 from math import radians, degrees
 from mathutils import Vector
 
+
+class Utils():
+
+    # http://stackoverflow.com/questions/354038/how-do-i-check-if-a-string-is-a-number-float-in-python    
+    def is_number(self, v):
+        try:
+            float(v)
+        except ValueError:
+            return False
+        else:
+            return True
+
 class DataStorage():
     
     data = None
+    headers = None
 
     def __init__(self, d = None):
         self.data = d
@@ -40,9 +53,14 @@ class DataStorage():
             self.data = []
             self.data = [[] for i in range(len(row))]
 
+        utils = Utils()
+
         # Append values from each parsed row into the array.
         for (j,v) in enumerate(row):
-            self.data[j].append(float(v))
+            if (utils.is_number(v)):
+                self.data[j].append(float(v))
+            else:
+                self.data[j].append(v)
     
     def get_columns(self):
         return self.data
@@ -84,7 +102,7 @@ class DataStorage():
             if (output_type == 'DEGREES'):
                 cate_count[i] = round(cate_count[i] * 360,2)
 
-        return (categories, cate_count)
+        return (cate_count, categories)
 
 
         
@@ -113,21 +131,40 @@ class HistogramVisualizer():
 
     def create_blender_objects(self):
         print("create_blender_objects..")
-
+        headers = self.dataStore.headers
+        print(headers)
         objects = []
         split = self.props.split
         column = self.props.column -1
         offset = 1
         # TODO: Detect whether column is string or numerical
         # TODO: if non-numeric: count the amount of identical values.
-        categories, cate_count = self.dataStore.get_frequencies(column,split,'PERCENTAGE')
+        cate_count, categories = self.dataStore.get_frequencies(column,split,'PERCENTAGE')
         #print(str(cate_count))
+
+        objects = []
+
+        # Create visualization title
+        middle = (offset * len(categories)-1) / 2
+        bpy.ops.object.select_all(action='DESELECT')
+        bpy.context.scene.objects.active = None
+        bpy.ops.object.text_add(location=(middle, -1.1, 0))
+        text = bpy.context.object
+        text.data.align_x = 'CENTER'
+        text.scale = (text.scale.x * 0.30,text.scale.y * 0.30, text.scale.z * 0.30)
+        if (headers is not None):
+            text.name ="title" + str(headers[column])
+            text.data.body = headers[column]
+        else:
+            text.name ="title"
+            text.data.body = "Histogram"
+        objects.append(text)
         
-        # Create  pie pieces for each category
-        # Create labels to put next to the pie pieces
+        # Create a block piece for each category
+        # Create labels to put underneath each block
         location_x = 0
         for i in range(len(categories)):
-            # Create pie chart
+            # Create block
             bpy.ops.object.select_all(action='DESELECT')
             bpy.context.scene.objects.active = None
             bpy.ops.mesh.primitive_plane_add(radius=0.5, location=(0, 0, 0))
@@ -271,12 +308,28 @@ class PieVisualizer():
 
     def create_blender_objects(self):
         print("create_blender_objects..")
-
+        headers = self.dataStore.headers
         objects = []
         split = self.props.split
         column = self.props.column -1
-        categories, cate_count = self.dataStore.get_frequencies(column,split,'DEGREES')
+        cate_count, categories = self.dataStore.get_frequencies(column,split,'DEGREES')
         #print(str(cate_count))
+        
+        # Create visualization title
+        bpy.ops.object.select_all(action='DESELECT')
+        bpy.context.scene.objects.active = None
+        bpy.ops.object.text_add(location=(0, 1.30, 0))
+        text = bpy.context.object
+        text.data.align_x = 'CENTER'
+        text.scale = (text.scale.x * 0.30,text.scale.y * 0.30, text.scale.z * 0.30)
+        if (headers is not None):
+            text.name ="title" + str(headers[column])
+            text.data.body = headers[column]
+        else:
+            text.name ="title"
+            text.data.body = "Pie Chart"
+        objects.append(text)
+        
         # Create  pie pieces for each category
         # Create labels to put next to the pie pieces
         rotation = 0
@@ -468,7 +521,7 @@ class ScatterVisualizer():
 class CSVReader():
 
     filepath = None
-    delimiter = ''
+    delimiter = ','
     quotechar = ''
     __headers = None
 
@@ -478,7 +531,7 @@ class CSVReader():
         # detect quotechar
         # detect_labels
 
-    def __detect_delimiter(self, f):
+    def __detect_delimiter(self, f):    
         commacount = 0
         semicommacount = 0
         tabcount = 0
@@ -514,29 +567,78 @@ class CSVReader():
         else:
             self.quotechar = '"'
 
-    def __detect_labels(self):
-        self.__headers = None
-        # does the file contain numerical data?
-            #no, then expose manual boolean for detecting labels.
-        # is the first line strings or numerical data?
-            # if it is strings, then assume it is labels. 
+    def __detect_labels(self, f):
+        non_digits = 0        
+
+        f.seek(0)
+        reader = csv.reader(f, delimiter=self.delimiter, quotechar=self.quotechar)
+        dataStore = DataStorage()
+        
+        # does the first line contain non-numerical data?
+        # if no, then there are no labels        
+        for (i, row) in enumerate(reader):
+            dataStore.add_row(row)
+            if (i == 20):
+                break
+        
+        data = dataStore.get_columns()
+        utils = Utils()
+        
+        for i in range(len(data)):
+            if (utils.is_number(data[i][0]) is False):
+                non_digits += 1
+                
+        if (non_digits == 0):
+            self.__headers = None
+            return
+
+        # store each piece of non-numerical data of first line in an array.
+        # check if _any_ of the next 20 lines contain data from first line
+        # if they do, then there are no labels
+        matches = 0
+        for (x,col) in enumerate(data):
+            for (y,val) in enumerate(col):
+                if (y == 0):
+                    continue
+                print('comparing ' + str(x) + str(0) + ':' + str(data[x][0]) + ' with ' + str(x) + str(y) + ':' + str(val))
+                if (data[x][0] == val):
+                    matches += 1
+
+        # if there are more matches than the amount of rows
+        # assume that we are dealing with data.
+        if (matches > len(data)):
+            self.__headers = None
+            return
+
+        # first row is non-numerical and unique, assume it's headers
+        headers = []
+        for (x,col) in enumerate(data):
+            headers.append(data[x][0])
+            
+        self.__headers = headers
+        return
 
     def parse_csv(self, context, filepath):
         print("running parse_csv...")
         f = open(filepath, 'r', encoding='utf-8')
         self.__detect_delimiter(f)
         self.__detect_quotechar(f)
+        self.__detect_labels(f)
+        
         f.seek(0)
         reader = csv.reader(f, delimiter=self.delimiter, quotechar=self.quotechar)
-        # TODO: Come up with a way to detect and skip possible headers using this.
-        #if (headers):
-            #reader.__next__()
 
-        # Read the CSV File and store data inside a columns data structure
-        columns = []
+        # create data structure
         dataStore = DataStorage()
+
+        # If we have detected labels, skip the header
+        if (self.__headers is not None):
+            print("detected headers: " + str(self.__headers))
+            dataStore.headers = self.__headers
+            reader.__next__()
+
+        # Read the CSV File and store data inside the columns data structure
         for (i, row) in enumerate(reader):
-            print(row)
             dataStore.add_row(row)
 
         # you can access the data using dataStore.get_rows()[x,y]
@@ -616,10 +718,10 @@ class ImportCSV(Operator, ImportHelper):
     bl_label = "Import Statistical Data"
 
     # ImportHelper mixin class uses this
-    filename_ext = ".csv"
+    filename_ext = {".csv", ".tsv"}
 
     filter_glob = StringProperty(
-            default="*.csv",
+            default={"*.csv", ".tsv"},
             options={'HIDDEN'},
             maxlen=255,  # Max internal buffer length, longer would be clamped.
             )

@@ -3,8 +3,8 @@ Import statistical data (.csv) into Blender.
 
 ## Current Status
 Support is limited to the following:
- * .csv files without headers and delimited by comma, semi-colon or tab
- * numerical data only
- * Will read exactly 3 coordinates for each line fx (201, -180, 9)
+ * .csv files delimited by comma, semi-colon or tab
+ * numerical data only (can detect headers)
+ * Scatterplot (first three columns), Pie chart and histogram support
 
 Licensed under GPL 3.0
