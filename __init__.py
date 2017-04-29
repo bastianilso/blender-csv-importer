@@ -23,7 +23,7 @@ from bpy.props import StringProperty, BoolProperty, EnumProperty, IntProperty, P
 from bpy.types import Operator, PropertyGroup
 import csv
 import bmesh
-from math import radians, degrees
+from math import radians, degrees, sqrt
 from mathutils import Vector
 from collections import Counter
 
@@ -37,6 +37,32 @@ class Utils():
             return False
         else:
             return True
+    
+    # get the dimensions of the visual area which the objects cover
+    def measure_bl_array_dimensions(self, objects):
+        dimensions = None
+        max_x = 0
+        max_y = 0
+        max_z = 0
+        for i in range(len(objects)-1):
+            if (objects[i].location.x > max_x):
+                max_x = objects[i].location.x
+            if (objects[i].location.y > max_y):
+                max_y = objects[i].location.y
+            if (objects[i].location.z > max_z):
+                max_z = ob.location.z
+
+        return (max_x, max_y, max_z)
+    
+    # normalizes scale whilst maintaining aspect ratio
+    def normalize_objects(self, objects):
+        dimensions = self.measure_bl_array_dimensions(objects)
+        max_number = max(dimensions)
+        scale = 10 # magic default number we always scale after.
+        scale_number = scale / max_number
+        for (i,ob) in enumerate(objects):
+            ob.scale = (ob.scale.x * scale_number, ob.scale.y * scale_number, ob.scale.z * scale_number)
+            ob.location = (ob.location.x * scale_number, ob.location.y * scale_number, ob.location.z * scale_number)
 
 class DataStorage():
     
@@ -109,35 +135,215 @@ class DataStorage():
                     cate_count[i] += 1
             #print("category: " + categories[i] + ", cate_count is: " + str(cate_count[i]))
                                 
-        total = sum(c for c in cate_count)   
-        for i in range(len(cate_count)):
-            #print(str(cate_count[i] / total) + "%")
-            cate_count[i] = cate_count[i] / total
-            if (output_type == 'DEGREES'):
-                cate_count[i] = round(cate_count[i] * 360,2)
-
         return (cate_count, categories)
 
-    def get_frequencies(self, column, output_type, split=None):
+    def get_frequencies(self, column, output_type='', split=None):
         utils = Utils()
         data = self.data
         cate_count = []
         categories = []
-        print(data[column][0])
-        print(utils.is_number(data[column][0]))
         if (utils.is_number(data[column][0])):
             cate_count, categories = self.get_numeric_frequencies(column, split)
-            print('detected as numbers')
         else:
             cate_count, categories = self.get_string_frequencies(column)
+
+        total = sum(c for c in cate_count)
+        
+        if (output_type == 'DEGREES'):
+            multiplier = 360
+        elif (output_type == 'PERCENTAGE'):
+            multiplier = 100
+        else: # return as decimal values
+            multiplier = 1
+        
+        for i in range(len(cate_count)):
+            cate_count[i] = cate_count[i] / total
+            cate_count[i] = round(cate_count[i] * multiplier,2)
         
         return (cate_count, categories)
 
-        
-# TODO: Define toString method
-
 # TODO: Make Abstract Visualizer Class.
 
+    # Idea: create a visualizer
+    # which maps a CSV column to specified
+    # attributes on an object.
+    # for example an object's color
+    # or an object's location, rotation, scale.
+    # this could for example be useful to create
+    # heatmaps with EDA data
+    
+    # then you should be able to combine several
+    # object visualizers, and set several properties
+    # to different object columns
+    
+    # I dont know how much this overlaps with fx animation nodes though.
+
+
+class ObjectVisualizer():
+
+    dataStore = None
+    bl_objects = []
+    props = None
+    user_object = None
+    
+    def visualize(self, dataStorage):
+        self.dataStore = dataStorage
+        self.props = bpy.context.scene.import_csv.visprops
+        self.bl_objects = self.create_blender_objects()
+        if (self.props.use_animate):
+            self.animate_objects()
+
+    def create_blender_objects(self):
+        print("create_blender_objects..")
+        headers = self.dataStore.headers
+        print(headers)
+        objects = []
+        split = self.props.split
+        column = self.props.column -1
+        area = 1.0
+        cate_count, categories = self.dataStore.get_frequencies(column,'PERCENTAGE',split)
+        print(str(cate_count))
+        print(str(categories))
+        objects = []
+        width = 5
+        if self.props.point_object:
+            user_object = bpy.data.objects[self.props.point_object]
+            individual_offset = (user_object.dimensions.x / 3)
+            offset = (user_object.dimensions.x / 2)
+        else:
+            bpy.ops.object.add(radius=0.1)
+            user_object = bpy.context.object
+            individual_offset = 0.3
+            offset = 0.5
+
+        scene = bpy.context.scene
+
+        abs_x = 0
+        for i in range(len(categories)): # Iterate over each category
+            bpy.ops.object.select_all(action='DESELECT')
+            bpy.context.scene.objects.active = None
+            
+            # Create the objects
+            location_y = 0
+            for j in range(int(cate_count[i]),0,-width): # Creates the rows
+                location_x = 0 + abs_x
+                for k in range(width): # Creates the items in each row
+                    ob = user_object.copy()
+                    ob.data = user_object.data
+                    ob.animation_data_clear()
+                    scene.objects.link(ob)
+                    ob.name = ob.name + str(categories[i])
+                    ob.location = (location_x, location_y, 0)
+                    location_x += ob.dimensions.x + individual_offset
+                    objects.append(ob)
+                    print("location_y is: " + str(location_y))
+                    print("abs_x is: " + str(abs_x))
+                location_y += user_object.dimensions.y + individual_offset
+                
+            prev_abs_x = abs_x
+            abs_x += (user_object.dimensions.x + individual_offset) * width + offset
+                
+            # Create category labels
+            bpy.ops.object.select_all(action='DESELECT')
+            bpy.context.scene.objects.active = None
+            cate_middle = (prev_abs_x + abs_x - 2*(offset + individual_offset)) / 2
+            bpy.ops.object.text_add(location=(cate_middle, -0.7, 0))
+            text = bpy.context.object
+            text.data.align_x = 'CENTER'
+            text.scale = (text.scale.x * 0.15,text.scale.y * 0.15, text.scale.z * 0.15)
+            text.name ="label" + str(categories[i])
+            text.data.body = categories[i]
+            objects.append(text)
+
+        # Create visualization title
+        middle = (((user_object.dimensions.x + individual_offset) * width + offset) * len(categories)-1) / 2
+        bpy.ops.object.select_all(action='DESELECT')
+        bpy.context.scene.objects.active = None
+        bpy.ops.object.text_add(location=(middle, -1.1, 0))
+        text = bpy.context.object
+        text.data.align_x = 'CENTER'
+        text.scale = (text.scale.x * 0.30,text.scale.y * 0.30, text.scale.z * 0.30)
+        if (headers is not None):
+            text.name ="title" + str(headers[column])
+            text.data.body = headers[column]
+        else:
+            text.name ="title"
+            text.data.body = "Comparison"
+        objects.append(text)
+        
+        # Create Parent Empty
+        #bpy.ops.object.select_all(action='DESELECT')
+        #bpy.context.scene.objects.active = None
+        utils = Utils()
+        utils.normalize_objects(objects)
+        #ob = bpy.context.object
+        #bpy.ops.object.add(radius=0.1, location=(0,0,0))
+        #for i in range(len(objects)-1):
+        #    objects[i].parent = ob
+
+        return objects
+        
+    def animate_objects(self):
+        duration = self.props.duration
+        objects = self.bl_objects
+        
+        # calculated length of animation per object.
+        animate = duration
+        
+        offset = float(duration) / float(len(objects))
+        
+        # Store the current frame so we can restore current frame state later.
+        startFrame = bpy.context.scene.frame_current
+        
+        print ("duration in frames: " + str(duration))
+        print("amount of objects: " + str(len(objects)))
+        print("offset per object: " + str(offset))
+        print("animate per object: " + str(animate))
+
+        current_offset = 0
+        # Iterate over each data point and animate it.
+        for (i, ob) in enumerate(objects):
+            print("----")
+            print("current frame is: " + str(bpy.context.scene.frame_current))
+            print("current offset is: " + str(offset))
+            print("current duration is: " + str(animate))
+            print("start frame is: " + str(bpy.context.scene.frame_current))
+            print("end frame is: " + str(bpy.context.scene.frame_current + animate))
+            
+            bpy.context.scene.frame_current += animate
+            ob.keyframe_insert(data_path="scale", index=-1)
+
+            # Insert start keyframe
+            bpy.context.scene.frame_current -= animate
+            ob.scale = (0,0,0)
+            ob.keyframe_insert(data_path="scale", index=-1)
+            
+            # Offset the next object animation
+            current_offset += offset
+            if (current_offset > 1):
+                bpy.context.scene.frame_current += round(current_offset)
+                current_offset = 0
+
+        # Restore frame state    
+        bpy.context.scene.frame_current = startFrame
+        
+    def draw(self, layout, context):
+        box = layout.box()
+        props = context.scene.import_csv.visprops
+        scene = context.scene
+
+        box.prop_search(props, "point_object", scene, "objects",text="Object")
+
+        box.prop(props, 'column')
+        box.prop(props, 'split')
+        box.prop(props, 'use_animate')
+        if (props.use_animate):
+            box.prop(props, 'duration')
+
+
+# TODO: Add support for specifying a user object
+# to support fx the use case with the "men" standing
+# or maybe this fits better in the object visualizer.
 class HistogramVisualizer():
 
     dataStore = None
@@ -156,7 +362,6 @@ class HistogramVisualizer():
         # Scale along y-axis by percentage
         return block
     
-
     def create_blender_objects(self):
         print("create_blender_objects..")
         headers = self.dataStore.headers
@@ -167,7 +372,7 @@ class HistogramVisualizer():
         offset = 1
         # TODO: Detect whether column is string or numerical
         # TODO: if non-numeric: count the amount of identical values.
-        cate_count, categories = self.dataStore.get_frequencies(column,split,'PERCENTAGE')
+        cate_count, categories = self.dataStore.get_frequencies(column,split)
         print(str(cate_count))
         print(str(categories))
         objects = []
@@ -273,7 +478,6 @@ class HistogramVisualizer():
 
     
     def draw(self, layout, context):
-        layout.label("test")
         box = layout.box()
         props = context.scene.import_csv.visprops
         scene = context.scene
@@ -485,7 +689,7 @@ class ScatterVisualizer():
             ob = bpy.context.object
             ob.name="dataPoint" + str(i)
             ob.location=loc
-            objects.append(ob)
+            objects.append(ob) 
             
         return objects
     
@@ -721,18 +925,21 @@ class ImportCSVProperties(PropertyGroup):
             props.vis_index = 1
         elif (other.type == 'OPT_HIST'):
             props.vis_index = 2
+        elif (other.type == 'OPT_OBJ'):
+            props.vis_index = 3
         return None
         
     type = EnumProperty(
             name="Type",
             description="Choose Visualization Type",
             items=(('OPT_SCATTER', "Scatter Plot", "Position each datapoint in X, Y, Z"),
-                   ('OPT_PIE', "Pie Chart", "Description two"),
-                   ('OPT_HIST', "Histogram", "Description two")),
+                   ('OPT_PIE', "Pie Chart", "Create a circle diagram based on frequency"),
+                   ('OPT_HIST', "Histogram", "Create a histogram based on frequency"),
+                   ('OPT_OBJ', "Object", "Create a custom visualization driven by a user object.")),
             default='OPT_SCATTER',
             update=update_visualizer
             )
-    visualizers = [ScatterVisualizer(), PieVisualizer(), HistogramVisualizer()]
+    visualizers = [ScatterVisualizer(), PieVisualizer(), HistogramVisualizer(), ObjectVisualizer()]
     vis_index = bpy.props.IntProperty()
 
 
