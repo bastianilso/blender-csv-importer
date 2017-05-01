@@ -38,7 +38,7 @@ class Utils():
         else:
             return True
     
-    # get the dimensions of the visual area which the objects cover
+    # get approximate dimensions of the visual area which the objects cover
     def measure_bl_array_dimensions(self, objects):
         dimensions = None
         max_x = 0
@@ -94,6 +94,7 @@ class Utils():
 class DataStorage():
     
     data = None
+    data_numeric = None
     headers = None
 
     def __init__(self, d = None):
@@ -105,7 +106,6 @@ class DataStorage():
         if (self.data == None):
             self.data = []
             self.data = [[] for i in range(len(row))]
-
         utils = Utils()
 
         # Append values from each parsed row into the array.
@@ -115,8 +115,25 @@ class DataStorage():
             else:
                 self.data[j].append(v)
     
-    def get_columns(self):
-        return self.data
+    def get_columns(self, type=''):
+        utils = Utils()
+        data = self.data
+
+        # AS_NUMERIC converts string data to numeric representations
+        if (type == 'AS_NUMERIC'):
+            # Loop through each column
+            for i in range(len(data)):
+                # Check if the first value is a number, skip if true.
+                if (utils.is_number(data[i][0])):
+                    continue
+                else:
+                    # Learn what categories are here
+                    cate_count, categories = self.get_string_frequencies(i)
+                    # Run through each string value
+                    # Use the index of the category name as numerical representation
+                    for j in range(len(data[i])):
+                        data[i][j] = categories.index(data[i][j])                        
+        return data
 
     def get_string_frequencies(self, column):
         data = self.data
@@ -490,7 +507,9 @@ class HistogramVisualizer():
         offset = 1
 
         # calculated length of animation per object.
-        animate = duration - (offset * len(objects))
+        animate = duration
+        
+        offset = float(duration) / float(len(objects))
         
         # Store the current frame so we can restore current frame state later.
         startFrame = bpy.context.scene.frame_current
@@ -500,6 +519,7 @@ class HistogramVisualizer():
         print("offset per object: " + str(offset))
         print("animate per object: " + str(animate))
 
+        current_offset = 0
         # Iterate over each data point and animate it.
         for (i, ob) in enumerate(objects):
             print("----")
@@ -523,7 +543,10 @@ class HistogramVisualizer():
             ob.keyframe_insert(data_path="scale", index=-1)
             
             # Offset the next object animation
-            bpy.context.scene.frame_current += offset
+            current_offset += offset
+            if (current_offset > 1):
+                bpy.context.scene.frame_current += round(current_offset)
+                current_offset = 0
 
         # Restore frame state    
         bpy.context.scene.frame_current = startFrame
@@ -667,7 +690,8 @@ class PieVisualizer():
         offset = 1
 
         # calculated length of animation per object.
-        animate = duration - (offset * len(objects))
+        animate = duration
+        offset = float(duration) / float(len(objects))
         
         # Store the current frame so we can restore current frame state later.
         startFrame = bpy.context.scene.frame_current
@@ -677,6 +701,7 @@ class PieVisualizer():
         print("offset per object: " + str(offset))
         print("animate per object: " + str(animate))
 
+        current_offset = 0
         # Iterate over each data point and animate it.
         for (i, ob) in enumerate(objects):
             print("----")
@@ -698,7 +723,10 @@ class PieVisualizer():
             ob.keyframe_insert(data_path="scale", index=-1)
             
             # Offset the next object animation
-            bpy.context.scene.frame_current += offset
+            current_offset += offset
+            if (current_offset > 1):
+                bpy.context.scene.frame_current += round(current_offset)
+                current_offset = 0
 
         # Restore frame state    
         bpy.context.scene.frame_current = startFrame
@@ -730,7 +758,7 @@ class ScatterVisualizer():
         self.bl_objects = self.create_blender_objects()
         if (self.props.use_animate):
             self.animate_objects()
-        
+
     def create_blender_objects(self):
         print("create_blender_objects..")
 
@@ -738,8 +766,11 @@ class ScatterVisualizer():
         bpy.ops.object.select_all(action='DESELECT')
         bpy.context.scene.objects.active = None
 
-        data = self.dataStore.get_columns()
-
+        data = self.dataStore.get_columns('AS_NUMERIC')
+        columnX = self.props.column -1
+        columnY = self.props.column2 -1
+        columnZ = self.props.column3 -1
+        
         # Create array to store the blender objects
         objects = []
         utils = Utils()
@@ -747,17 +778,26 @@ class ScatterVisualizer():
         # Iterate over the data and create blender objects for each datapoint.
         # For now we assume the first three columns correspond to X Y Z
         for i in range(len(data[0])):
-            loc = (data[0][i], data[1][i], data[2][i])
-            
             # did the user specify an object? otherwise create placeholder objects.
             if self.props.point_object:
                 bpy.ops.object.add_named(name=self.props.point_object,linked=True)
             else:
-                bpy.ops.object.add(radius=0.1)
-                
+                bpy.ops.object.add(radius=0.1, location=(0,0,0))
+
             ob = bpy.context.object
             ob.name="dataPoint" + str(i)
-            ob.location=loc
+
+            ob.location = (0,0,0)
+
+            if (self.props.use_column):
+                print("X-Axis: " + str(data[columnX][i]))
+                ob.location.x = data[columnX][i]
+            if (self.props.use_column2):        
+                print("Y-Axis: " + str(data[columnY][i]))        
+                ob.location.y = data[columnY][i]
+            if (self.props.use_column3):
+                print("Z-Axis: " + str(data[columnZ][i]))        
+                ob.location.z = data[columnZ][i]
             objects.append(ob) 
 
         # Create Parent Empty
@@ -775,13 +815,17 @@ class ScatterVisualizer():
         print("running animate_objects..")
         
         duration = self.props.duration
+        
+        # calculated length of animation per object.
+        animate = duration
+        
         objects = self.bl_objects
         
         # Specify an offset
         offset = 1
 
         # calculated length of animation per object.    
-        animate = duration - (offset * len(objects))
+        offset = float(duration) / float(len(objects))
         
         # Store the current frame so we can restore current frame state later.
         startFrame = bpy.context.scene.frame_current
@@ -789,8 +833,8 @@ class ScatterVisualizer():
         print ("duration in frames: " + str(duration))
         print("amount of objects: " + str(len(objects)))
         print("offset per object: " + str(offset))
-        print("animate per object: " + str(animate))
 
+        current_offset = 0
         # Iterate over each data point and animate it.
         for (i, ob) in enumerate(objects):
             print("----")
@@ -810,23 +854,46 @@ class ScatterVisualizer():
             ob.keyframe_insert(data_path="location", index=-1)
             
             # Offset the next object animation
-            bpy.context.scene.frame_current += offset
+            current_offset += offset
+            if (current_offset > 1):
+                bpy.context.scene.frame_current += round(current_offset)
+                current_offset = 0
 
         # Restore frame state    
         bpy.context.scene.frame_current = startFrame
 
     def draw(self, layout, context):
-        layout.label("test")
         box = layout.box()
         props = context.scene.import_csv.visprops
         scene = context.scene
+        
+        row = box.row(align=True)
+        row.prop(props, 'use_column')
+        col = row.column(align=True)
+        col.prop(props, 'column')
+        if (props.use_column == False):
+            col.enabled = False
+            
+        row = box.row(align=True)
+        row.prop(props, 'use_column2')
+        col = row.column(align=True)
+        col.prop(props, 'column2')
+        if (props.use_column2 == False):
+            col.enabled = False
+            
+        row = box.row(align=True)
+        row.prop(props, 'use_column3')
+        col = row.column(align=True)
+        col.prop(props, 'column3')
+        if (props.use_column3 == False):
+            col.enabled = False
 
         box.prop_search(props, "point_object", scene, "objects",text="Object")
         # TODO: Expose how things should be mapped also
         box.prop(props, 'use_animate')
         if (props.use_animate):
             box.prop(props, 'duration')
-            # TODO: Expose Animation Type    
+            # TODO: Expose Animation Type
     
 class CSVReader():
 
@@ -977,10 +1044,42 @@ class VisualizationProperties(PropertyGroup):
     #       and use actual header names to choose column
     column = IntProperty(
         name="Column",
-        description="Which column to create pie chart from",
+        description="Choose which column of data in the .csv to use",
         min=1,
         default=1,
         )
+
+    use_column = BoolProperty(
+            name="X-Axis",
+            description="Map CSV column to X Axis",
+            default=True,
+            )
+
+    column2 = IntProperty(
+        name="Column",
+        description="Choose which column of data in the .csv to use",
+        min=1,
+        default=2,
+        )
+
+    use_column2 = BoolProperty(
+            name="Y-Axis",
+            description="Map CSV column to Y Axis",
+            default=True,
+            )
+        
+    column3 = IntProperty(
+        name="Column",
+        description="Choose which column of data in the .csv to use",
+        min=1,
+        default=3,
+        )
+        
+    use_column3 = BoolProperty(
+            name="Z-Axis",
+            description="Map CSV column to Z Axis",
+            default=True,
+            )
         
     split = IntProperty(
         name="Subdivision",
