@@ -6,7 +6,7 @@ bl_info = {
  "blender": (2, 7, 7),  
  "location": "File > Import > Import Statistical Data (*.csv)",  
  "description": "Import, visualize and animate data stored as *.csv",  
- "warning": "",  
+ "warning": "",
  "wiki_url": "",  
  "tracker_url": "https://github.com/bastianilso/blender-csv-importer",  
  "category": "Import-Export"}
@@ -23,7 +23,7 @@ from bpy.props import StringProperty, BoolProperty, EnumProperty, IntProperty, P
 from bpy.types import Operator, PropertyGroup
 import csv
 import bmesh
-from math import radians, degrees, sqrt
+from math import radians, degrees
 from mathutils import Vector
 from collections import Counter
 
@@ -63,6 +63,33 @@ class Utils():
         for (i,ob) in enumerate(objects):
             ob.scale = (ob.scale.x * scale_number, ob.scale.y * scale_number, ob.scale.z * scale_number)
             ob.location = (ob.location.x * scale_number, ob.location.y * scale_number, ob.location.z * scale_number)
+
+    # https://gifguide2code.wordpress.com/2017/04/09/python-how-to-code-materials-in-blender-cycles/
+    def create_shadeless_cycles_mat(self,color=(0.08,0.09,0.1)):
+        # initialize node
+        mat_name = "VisualizationMat"
+        mat = bpy.data.materials.new(mat_name)
+        bpy.data.materials[mat_name].use_nodes = True
+        
+        # connect emission node with material output node
+        bpy.data.materials[mat_name].node_tree.nodes.new(type='ShaderNodeEmission')
+        inp = bpy.data.materials[mat_name].node_tree.nodes['Material Output'].inputs['Surface']
+        outp = bpy.data.materials[mat_name].node_tree.nodes['Emission'].outputs['Emission']
+        bpy.data.materials[mat_name].node_tree.links.new(inp,outp)
+
+        # connect light path node to emission node
+        bpy.data.materials[mat_name].node_tree.nodes.new(type='ShaderNodeLightPath')
+        inp = bpy.data.materials[mat_name].node_tree.nodes['Emission'].inputs['Strength']
+        outp = bpy.data.materials[mat_name].node_tree.nodes['Light Path'].outputs['Is Camera Ray']
+        bpy.data.materials[mat_name].node_tree.links.new(inp,outp)
+
+        # Change emission color
+        bpy.data.materials[mat_name].node_tree.nodes['Emission'].inputs['Color'].default_value = (color[0],color[1],color[2],1.0)
+        bpy.data.materials[mat_name].diffuse_color = color
+        bpy.data.materials[mat_name].use_shadeless = True
+        
+        return bpy.data.materials[mat_name]
+        
 
 class DataStorage():
     
@@ -157,7 +184,7 @@ class DataStorage():
             multiplier = 1
         
         for i in range(len(cate_count)):
-            cate_count[i] = cate_count[i] / total
+            cate_count[i] = float(cate_count[i]) / float(total)
             cate_count[i] = round(cate_count[i] * multiplier,2)
         
         return (cate_count, categories)
@@ -185,6 +212,7 @@ class ObjectVisualizer():
     bl_objects = []
     props = None
     user_object = None
+    material = None
     
     def visualize(self, dataStorage):
         self.dataStore = dataStorage
@@ -206,15 +234,19 @@ class ObjectVisualizer():
         print(str(categories))
         objects = []
         width = 5
+        utils = Utils()
+        
         if self.props.point_object:
             user_object = bpy.data.objects[self.props.point_object]
             individual_offset = (user_object.dimensions.x / 3)
             offset = (user_object.dimensions.x / 2)
+            self.material = user_object.active_material
         else:
             bpy.ops.object.add(radius=0.1)
             user_object = bpy.context.object
             individual_offset = 0.3
             offset = 0.5
+            self.material = utils.create_shadeless_cycles_mat()
 
         scene = bpy.context.scene
 
@@ -253,6 +285,8 @@ class ObjectVisualizer():
             text.scale = (text.scale.x * 0.15,text.scale.y * 0.15, text.scale.z * 0.15)
             text.name ="label" + str(categories[i])
             text.data.body = categories[i]
+            text.active_material = self.material
+            
             objects.append(text)
 
         # Create visualization title
@@ -262,24 +296,28 @@ class ObjectVisualizer():
         bpy.ops.object.text_add(location=(middle, -1.1, 0))
         text = bpy.context.object
         text.data.align_x = 'CENTER'
-        text.scale = (text.scale.x * 0.30,text.scale.y * 0.30, text.scale.z * 0.30)
+        text.scale = (text.dimensions.x * 0.30,text.dimensions.y * 0.30, text.dimensions.z * 0.30)
+        bpy.ops.object.transform_apply(scale=True)
         if (headers is not None):
             text.name ="title" + str(headers[column])
             text.data.body = headers[column]
         else:
             text.name ="title"
             text.data.body = "Comparison"
+        text.active_material = self.material
         objects.append(text)
-        
+
+
         # Create Parent Empty
-        #bpy.ops.object.select_all(action='DESELECT')
-        #bpy.context.scene.objects.active = None
-        utils = Utils()
-        utils.normalize_objects(objects)
-        #ob = bpy.context.object
-        #bpy.ops.object.add(radius=0.1, location=(0,0,0))
-        #for i in range(len(objects)-1):
-        #    objects[i].parent = ob
+        bpy.ops.object.select_all(action='DESELECT')
+        bpy.context.scene.objects.active = None        
+        bpy.ops.object.add(radius=0.5, location=(0,text.location.y,0))
+        ob = bpy.context.object
+        for i in range(len(objects)):
+            objects[i].parent = ob
+            objects[i].matrix_parent_inverse = ob.matrix_world.inverted()
+
+        utils.normalize_objects(objects)    
 
         return objects
         
@@ -349,6 +387,7 @@ class HistogramVisualizer():
     dataStore = None
     bl_objects = None
     props = None
+    material = None
 
     def visualize(self, dataStorage):
         self.dataStore = dataStorage
@@ -372,27 +411,13 @@ class HistogramVisualizer():
         offset = 1
         # TODO: Detect whether column is string or numerical
         # TODO: if non-numeric: count the amount of identical values.
-        cate_count, categories = self.dataStore.get_frequencies(column,split)
+        cate_count, categories = self.dataStore.get_frequencies(column,'DECIMAL',split)
         print(str(cate_count))
         print(str(categories))
         objects = []
-
-        # Create visualization title
-        middle = (offset * len(categories)-1) / 2
-        bpy.ops.object.select_all(action='DESELECT')
-        bpy.context.scene.objects.active = None
-        bpy.ops.object.text_add(location=(middle, -1.1, 0))
-        text = bpy.context.object
-        text.data.align_x = 'CENTER'
-        text.scale = (text.scale.x * 0.30,text.scale.y * 0.30, text.scale.z * 0.30)
-        if (headers is not None):
-            text.name ="title" + str(headers[column])
-            text.data.body = headers[column]
-        else:
-            text.name ="title"
-            text.data.body = "Histogram"
-        objects.append(text)
-        
+        utils = Utils()
+        self.material = utils.create_shadeless_cycles_mat()
+    
         # Create a block piece for each category
         # Create labels to put underneath each block
         location_x = 0
@@ -408,6 +433,7 @@ class HistogramVisualizer():
             ob.scale = (ob.scale.x * 0.35,ob.scale.y * cate_count[i], ob.scale.z)
             bpy.ops.object.transform_apply(scale=True)
             ob.location.x = location_x
+            ob.active_material = self.material
             
             # Create labels
             bpy.ops.object.select_all(action='DESELECT')
@@ -418,11 +444,38 @@ class HistogramVisualizer():
             text.scale = (text.scale.x * 0.15,text.scale.y * 0.15, text.scale.z * 0.15)
             text.name ="label" + str(categories[i])
             text.data.body = categories[i]
+            text.active_material = self.material
             
             objects.append(ob)
             objects.append(text)
             
             location_x += offset
+
+        # Create visualization title
+        middle = (offset * len(categories)-1) / 2
+        bpy.ops.object.select_all(action='DESELECT')
+        bpy.context.scene.objects.active = None
+        bpy.ops.object.text_add(location=(middle, -1.1, 0))
+        text = bpy.context.object
+        text.data.align_x = 'CENTER'
+        text.scale = (text.scale.x * 0.30,text.scale.y * 0.30, text.scale.z * 0.30)
+        if (headers is not None):
+            text.name ="title" + str(headers[column])
+            text.data.body = headers[column]
+        else:
+            text.name ="title"
+            text.data.body = "Histogram"
+        text.active_material = self.material
+        objects.append(text)
+
+        # Create Parent Empty
+        bpy.ops.object.select_all(action='DESELECT')
+        bpy.context.scene.objects.active = None        
+        bpy.ops.object.add(radius=0.25, location=(0,text.location.y,0))
+        ob = bpy.context.object
+        for i in range(len(objects)):
+            objects[i].parent = ob
+            objects[i].matrix_parent_inverse = ob.matrix_world.inverted()
 
         return objects
         
@@ -495,6 +548,7 @@ class PieVisualizer():
     bl_objects = None
     bl_labels = None
     props = None
+    material = None
 
     def visualize(self, dataStorage):
         self.dataStore = dataStorage
@@ -544,8 +598,11 @@ class PieVisualizer():
         objects = []
         split = self.props.split
         column = self.props.column -1
-        cate_count, categories = self.dataStore.get_frequencies(column,split,'DEGREES')
-        #print(str(cate_count))
+        cate_count, categories = self.dataStore.get_frequencies(column,'DEGREES',split)
+        print(str(cate_count))
+        print(str(categories))
+        utils = Utils()
+        self.material = utils.create_shadeless_cycles_mat()
         
         # Create visualization title
         bpy.ops.object.select_all(action='DESELECT')
@@ -560,6 +617,7 @@ class PieVisualizer():
         else:
             text.name ="title"
             text.data.body = "Pie Chart"
+        text.active_material = self.material
         objects.append(text)
         
         # Create  pie pieces for each category
@@ -582,11 +640,20 @@ class PieVisualizer():
             text = bpy.context.object
             text.name ="label" + str(categories[i])
             self.set_text_labels(text, categories[i], rotation, radians(cate_count[i]))
-            
+            text.active_material = self.material
             objects.append(circle)
             objects.append(text)
-            
+
             rotation += radians(cate_count[i])
+
+        # Create Parent Empty
+        bpy.ops.object.select_all(action='DESELECT')
+        bpy.context.scene.objects.active = None        
+        bpy.ops.object.add(radius=0.25, location=(0,0,0))
+        ob = bpy.context.object
+        for i in range(len(objects)):
+            objects[i].parent = ob
+            objects[i].matrix_parent_inverse = ob.matrix_world.inverted()
 
         return objects
 
@@ -655,6 +722,7 @@ class ScatterVisualizer():
     dataStore = None
     bl_objects = None
     props = None
+    material = None
 
     def visualize(self, dataStorage):
         self.dataStore = dataStorage
@@ -674,6 +742,7 @@ class ScatterVisualizer():
 
         # Create array to store the blender objects
         objects = []
+        utils = Utils()
         
         # Iterate over the data and create blender objects for each datapoint.
         # For now we assume the first three columns correspond to X Y Z
@@ -690,6 +759,15 @@ class ScatterVisualizer():
             ob.name="dataPoint" + str(i)
             ob.location=loc
             objects.append(ob) 
+
+        # Create Parent Empty
+        bpy.ops.object.select_all(action='DESELECT')
+        bpy.context.scene.objects.active = None        
+        bpy.ops.object.add(radius=0.25, location=(0,0,0))
+        ob = bpy.context.object
+        for i in range(len(objects)):
+            objects[i].parent = ob
+            objects[i].matrix_parent_inverse = ob.matrix_world.inverted()
             
         return objects
     
@@ -832,7 +910,7 @@ class CSVReader():
             for (y,val) in enumerate(col):
                 if (y == 0):
                     continue
-                print('comparing ' + str(x) + str(0) + ':' + str(data[x][0]) + ' with ' + str(x) + str(y) + ':' + str(val))
+                #print('comparing ' + str(x) + str(0) + ':' + str(data[x][0]) + ' with ' + str(x) + str(y) + ':' + str(val))
                 if (data[x][0] == val):
                     matches += 1
 
