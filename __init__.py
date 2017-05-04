@@ -19,12 +19,13 @@ def dump(obj):
 
 import bpy
 from bpy_extras.io_utils import ImportHelper
-from bpy.props import StringProperty, BoolProperty, EnumProperty, IntProperty, PointerProperty
+from bpy.props import StringProperty, BoolProperty, EnumProperty, IntProperty, PointerProperty, FloatVectorProperty
 from bpy.types import Operator, PropertyGroup
 import csv
 import bmesh
+import random
 from math import radians, degrees
-from mathutils import Vector
+from mathutils import Vector, Color
 from collections import Counter
 
 class Utils():
@@ -65,9 +66,9 @@ class Utils():
             ob.location = (ob.location.x * scale_number, ob.location.y * scale_number, ob.location.z * scale_number)
 
     # https://gifguide2code.wordpress.com/2017/04/09/python-how-to-code-materials-in-blender-cycles/
-    def create_shadeless_cycles_mat(self,color=(0.08,0.09,0.1)):
+    def create_shadeless_cycles_mat(self,color=(0.08,0.09,0.1),id=''):
         # initialize node
-        mat_name = "VisualizationMat"
+        mat_name = "VisualizationMat" + id
         mat = bpy.data.materials.new(mat_name)
         bpy.data.materials[mat_name].use_nodes = True
         
@@ -89,7 +90,51 @@ class Utils():
         bpy.data.materials[mat_name].use_shadeless = True
         
         return bpy.data.materials[mat_name]
+
+    # http://stackoverflow.com/questions/7267226/ddg#7267280
+    def frange(x, y, jump):
+      while x < y:
+        yield x
+        x += jump
         
+    def create_adjacent_colors(self, primary_color, amount):
+        colors = []
+        influence_pool = 0.3
+        influencers = [0.1,0.1]        
+        satval = [0.0, 0.0]
+        if (primary_color.s > 0.8):
+            influencers[0] = influencers[0] * (-1)
+        if (primary_color.s < 0.01):
+            influencers[0] = 0.0 # assume greyscale
+            influencers[1] = 0.6
+
+        if (primary_color.v > 0.8):
+            influencers[1] = influencers[1] * (-1)
+        if (primary_color.v < 0.1):
+            influencers[1] = influencers[1] + 0.2
+
+        flipper = 1
+        for x in range(amount):
+            color = primary_color.copy()
+            color.h = color.h + random.uniform(0.00,0.05) * flipper # select hue at random
+            while (influence_pool > 0):
+                print("satval is: " + str(satval) + ", influence_pool is: " + str(influence_pool))
+                satval[0] += random.uniform(0.00,influencers[0])
+                influence_pool -= abs(satval[0])
+                if (influence_pool > 0):
+                    satval[1] += random.uniform(0.00,influencers[1])
+                    influence_pool -= abs(satval[1])
+            random.shuffle(satval)
+            color.s = color.s + satval[0]
+            color.v = color.v + satval[1]
+            print("color.h: " + str(color.h) + ", color.s: " + str(color.s) + ", color.v: " + str(color.v))
+            colors.append(color)
+            color = []
+            satval = [0.0, 0.0]
+            influence_pool = 0.5
+            flipper = flipper * (-1)
+        
+        return colors
 
 class DataStorage():
     
@@ -620,6 +665,7 @@ class PieVisualizer():
         headers = self.dataStore.headers
         objects = []
         split = self.props.split
+        color = self.props.color
         column = self.props.column -1
         cate_count, categories = self.dataStore.get_frequencies(column,'DEGREES',split)
         print(str(cate_count))
@@ -642,11 +688,15 @@ class PieVisualizer():
             text.data.body = "Pie Chart"
         text.active_material = self.material
         objects.append(text)
-        
+        colors = []
+        colors = utils.create_adjacent_colors(color, len(categories))        
+        print(colors)
         # Create  pie pieces for each category
         # Create labels to put next to the pie pieces
         rotation = 0
         for i in range(len(categories)):
+            print(colors[i])
+            material = utils.create_shadeless_cycles_mat(colors[i],str(i))
             # Create pie chart
             bpy.ops.object.select_all(action='DESELECT')
             bpy.context.scene.objects.active = None
@@ -655,6 +705,7 @@ class PieVisualizer():
             circle.name ="pie" + str(categories[i])
             self.pie_cutout(circle, cate_count[i])
             circle.rotation_euler = (0,0, rotation)
+            circle.active_material = material
 
             # Create labels
             bpy.ops.object.select_all(action='DESELECT')
@@ -663,7 +714,7 @@ class PieVisualizer():
             text = bpy.context.object
             text.name ="label" + str(categories[i])
             self.set_text_labels(text, categories[i], rotation, radians(cate_count[i]))
-            text.active_material = self.material
+            text.active_material = material
             objects.append(circle)
             objects.append(text)
 
@@ -733,13 +784,13 @@ class PieVisualizer():
 
 
     def draw(self, layout, context):
-        layout.label("test")
         box = layout.box()
         props = context.scene.import_csv.visprops
         scene = context.scene
         
         box.prop(props, 'column')
         box.prop(props, 'split')
+        box.prop(props, 'color')        
         box.prop(props, 'use_animate')
         if (props.use_animate):
             box.prop(props, 'duration')
@@ -1087,6 +1138,10 @@ class VisualizationProperties(PropertyGroup):
         min=2,
         default=3,
         )
+        
+    color = FloatVectorProperty(name="Color", 
+                                subtype='COLOR', 
+                                default=[0.35,0.49,0.78])      
 
 class ImportCSVProperties(PropertyGroup):
     visprops = bpy.props.PointerProperty(type=VisualizationProperties)
