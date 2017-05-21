@@ -16,13 +16,13 @@ Supports the following:
 ## How to install
 
  1. Download a ZIP of this repository
- 2. Open Blender. Go to _File_ -> _User Preferences_ -> _Addons_ -> _Install from ZIP_ and choose the downloaded ZIP folder.
+ 2. Open Blender. Go to _File_ ➙ _User Preferences_ ➙ _Addons_ ➙ _Install from ZIP_ and choose the downloaded ZIP folder.
  3. Activate the Plug-in by clicking the checkmark next to "Import-Export: Import Statistical Data (*.csv)"
  
  
 ## How to use
 
-1. In Blender, go to _File_ ->_Import_-> _Statistical Data (.csv)
+1. In Blender, go to _File_ ➙_Import_➙ _Statistical Data (.csv)_
 2. In the file selector, choose your CSV file and adjust the settings in the left-panel. Then press _Import CSV_.
 
 

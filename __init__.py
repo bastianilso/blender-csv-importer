@@ -122,7 +122,7 @@ class Utils():
             flipper = flipper * (-1)
         
         return colors
-
+    
 
 # DataStorage is essentially a class around a two-dimensional array with 
 # functions to store dataset headers, extract frequencies etc.
@@ -260,7 +260,8 @@ class ObjectVisualizer():
         headers = self.dataStore.headers
         objects = []
         split = self.props.split
-        column = self.props.column -1
+        data = self.dataStore.get_columns()
+        column = min(self.props.column, len(data)) -1
         area = 1.0
         cate_count, categories = self.dataStore.get_frequencies(column,'PERCENTAGE',split)
         objects = []
@@ -415,7 +416,8 @@ class HistogramVisualizer():
         headers = self.dataStore.headers
         objects = []
         split = self.props.split
-        column = self.props.column -1
+        data = self.dataStore.get_columns()
+        column = min(self.props.column, len(data)) -1
         offset = 1
         cate_count, categories = self.dataStore.get_frequencies(column,'DECIMAL',split)
         objects = []
@@ -591,7 +593,8 @@ class PieVisualizer():
         objects = []
         split = self.props.split
         color = self.props.color
-        column = self.props.column -1
+        data = self.dataStore.get_columns()
+        column = min(self.props.column, len(data)) -1
         cate_count, categories = self.dataStore.get_frequencies(column,'DEGREES',split)
         utils = Utils()
         if (bpy.context.scene.render.engine == 'CYCLES'):
@@ -727,15 +730,14 @@ class ScatterVisualizer():
         # Ensure no objects are selected in the scene before proceeding.
         bpy.ops.object.select_all(action='DESELECT')
         bpy.context.scene.objects.active = None
-
-        data = self.dataStore.get_columns('AS_NUMERIC')
-        columnX = self.props.column -1
-        columnY = self.props.column2 -1
-        columnZ = self.props.column3 -1
-        
         # Create array to store the blender objects
         objects = []
         utils = Utils()
+
+        data = self.dataStore.get_columns('AS_NUMERIC')
+        columnX = min(self.props.column, len(data))-1
+        columnY = min(self.props.column2, len(data))-1
+        columnZ = min(self.props.column3, len(data))-1
         
         # Iterate over the data and create blender objects for each datapoint.
         # For now we assume the first three columns correspond to X Y Z
