@@ -1,21 +1,14 @@
-# <pep8 compliant>
 bl_info = {  
  "name": "Import Statistical Data (*.csv)",  
  "author": "Bastian Ilso (bastianilso)",  
- "version": (0, 1),  
- "blender": (2, 7, 7),  
+ "version": (0, 2),  
+ "blender": (2, 7, 8),  
  "location": "File > Import > Import Statistical Data (*.csv)",  
  "description": "Import, visualize and animate data stored as *.csv",  
  "warning": "",
  "wiki_url": "",  
  "tracker_url": "https://github.com/bastianilso/blender-csv-importer",  
  "category": "Import-Export"}
-
-# Usage: call when you want to print contents of an object
-def dump(obj):
-   for attr in dir(obj):
-       if hasattr( obj, attr ):
-           print( "obj.%s = %s" % (attr, getattr(obj, attr)))
 
 import bpy
 from bpy_extras.io_utils import ImportHelper
@@ -27,6 +20,7 @@ import random
 from math import radians, degrees
 from mathutils import Vector, Color
 from collections import Counter
+
 
 class Utils():
 
@@ -56,15 +50,15 @@ class Utils():
         return (max_x, max_y, max_z)
     
     # normalizes scale whilst maintaining aspect ratio
-    def normalize_objects(self, objects):
+    def normalize_objects(self, objects, scale):
         dimensions = self.measure_bl_array_dimensions(objects)
         max_number = max(dimensions)
-        scale = 10 # magic default number we always scale after.
         scale_number = scale / max_number
         for (i,ob) in enumerate(objects):
             ob.scale = (ob.scale.x * scale_number, ob.scale.y * scale_number, ob.scale.z * scale_number)
             ob.location = (ob.location.x * scale_number, ob.location.y * scale_number, ob.location.z * scale_number)
 
+    # Based on:
     # https://gifguide2code.wordpress.com/2017/04/09/python-how-to-code-materials-in-blender-cycles/
     def create_shadeless_cycles_mat(self,color=(0.08,0.09,0.1),id=''):
         # initialize node
@@ -91,12 +85,7 @@ class Utils():
         
         return bpy.data.materials[mat_name]
 
-    # http://stackoverflow.com/questions/7267226/ddg#7267280
-    def frange(x, y, jump):
-      while x < y:
-        yield x
-        x += jump
-        
+    # Create a number of colors with similar, hue, saturation and value as a target color.
     def create_adjacent_colors(self, primary_color, amount):
         colors = []
         influence_pool = 0.3
@@ -118,7 +107,6 @@ class Utils():
             color = primary_color.copy()
             color.h = color.h + random.uniform(0.00,0.05) * flipper # select hue at random
             while (influence_pool > 0):
-                print("satval is: " + str(satval) + ", influence_pool is: " + str(influence_pool))
                 satval[0] += random.uniform(0.00,influencers[0])
                 influence_pool -= abs(satval[0])
                 if (influence_pool > 0):
@@ -127,7 +115,6 @@ class Utils():
             random.shuffle(satval)
             color.s = color.s + satval[0]
             color.v = color.v + satval[1]
-            print("color.h: " + str(color.h) + ", color.s: " + str(color.s) + ", color.v: " + str(color.v))
             colors.append(color)
             color = []
             satval = [0.0, 0.0]
@@ -136,6 +123,9 @@ class Utils():
         
         return colors
 
+
+# DataStorage is essentially a class around a two-dimensional array with 
+# functions to store dataset headers, extract frequencies etc.
 class DataStorage():
     
     data = None
@@ -195,8 +185,6 @@ class DataStorage():
         return (cate_count, categories)     
             
     def get_numeric_frequencies(self, column, split):
-        # TODO: Detect whether column is string or numerical
-        # TODO: if non-numeric: count the amount of identical values.
         data = self.data
         max_value = max(data[column])
         min_value = min(data[column])
@@ -222,7 +210,6 @@ class DataStorage():
                 v = data[column][j]
                 if (v <= hv and v >= lv):
                     cate_count[i] += 1
-            #print("category: " + categories[i] + ", cate_count is: " + str(cate_count[i]))
                                 
         return (cate_count, categories)
 
@@ -251,23 +238,8 @@ class DataStorage():
         
         return (cate_count, categories)
 
-# TODO: Make Abstract Visualizer Class.
-
-    # Idea: create a visualizer
-    # which maps a CSV column to specified
-    # attributes on an object.
-    # for example an object's color
-    # or an object's location, rotation, scale.
-    # this could for example be useful to create
-    # heatmaps with EDA data
-    
-    # then you should be able to combine several
-    # object visualizers, and set several properties
-    # to different object columns
-    
-    # I dont know how much this overlaps with fx animation nodes though.
-
-
+# ObjectVisualizer is a Visualizer which instantiates objects
+# based on frequency in a target data column.
 class ObjectVisualizer():
 
     dataStore = None
@@ -284,16 +256,12 @@ class ObjectVisualizer():
             self.animate_objects()
 
     def create_blender_objects(self):
-        print("create_blender_objects..")
         headers = self.dataStore.headers
-        print(headers)
         objects = []
         split = self.props.split
         column = self.props.column -1
         area = 1.0
         cate_count, categories = self.dataStore.get_frequencies(column,'PERCENTAGE',split)
-        print(str(cate_count))
-        print(str(categories))
         objects = []
         width = 5
         utils = Utils()
@@ -330,8 +298,6 @@ class ObjectVisualizer():
                     ob.location = (location_x, location_y, 0)
                     location_x += ob.dimensions.x + individual_offset
                     objects.append(ob)
-                    print("location_y is: " + str(location_y))
-                    print("abs_x is: " + str(abs_x))
                 location_y += user_object.dimensions.y + individual_offset
                 
             prev_abs_x = abs_x
@@ -369,7 +335,6 @@ class ObjectVisualizer():
         text.active_material = self.material
         objects.append(text)
 
-
         # Create Parent Empty
         bpy.ops.object.select_all(action='DESELECT')
         bpy.context.scene.objects.active = None        
@@ -379,7 +344,7 @@ class ObjectVisualizer():
             objects[i].parent = ob
             objects[i].matrix_parent_inverse = ob.matrix_world.inverted()
 
-        utils.normalize_objects(objects)    
+        utils.normalize_objects(objects, scale=10)    
 
         return objects
         
@@ -389,27 +354,14 @@ class ObjectVisualizer():
         
         # calculated length of animation per object.
         animate = duration
-        
         offset = float(duration) / float(len(objects))
         
         # Store the current frame so we can restore current frame state later.
         startFrame = bpy.context.scene.frame_current
         
-        print ("duration in frames: " + str(duration))
-        print("amount of objects: " + str(len(objects)))
-        print("offset per object: " + str(offset))
-        print("animate per object: " + str(animate))
-
         current_offset = 0
         # Iterate over each data point and animate it.
         for (i, ob) in enumerate(objects):
-            print("----")
-            print("current frame is: " + str(bpy.context.scene.frame_current))
-            print("current offset is: " + str(offset))
-            print("current duration is: " + str(animate))
-            print("start frame is: " + str(bpy.context.scene.frame_current))
-            print("end frame is: " + str(bpy.context.scene.frame_current + animate))
-            
             bpy.context.scene.frame_current += animate
             ob.keyframe_insert(data_path="scale", index=-1)
 
@@ -441,9 +393,8 @@ class ObjectVisualizer():
             box.prop(props, 'duration')
 
 
-# TODO: Add support for specifying a user object
-# to support fx the use case with the "men" standing
-# or maybe this fits better in the object visualizer.
+# HistogramVisualizer creates a histogram (bar chart)
+# based on data frequency in a data column.
 class HistogramVisualizer():
 
     dataStore = None
@@ -458,24 +409,13 @@ class HistogramVisualizer():
         if (self.props.use_animate):
             self.animate_objects()
 
-    def block_scale(self, block, percentage):
-        # Set origin to the bottom
-        # Scale along y-axis by percentage
-        return block
-    
     def create_blender_objects(self):
-        print("create_blender_objects..")
         headers = self.dataStore.headers
-        print(headers)
         objects = []
         split = self.props.split
         column = self.props.column -1
         offset = 1
-        # TODO: Detect whether column is string or numerical
-        # TODO: if non-numeric: count the amount of identical values.
         cate_count, categories = self.dataStore.get_frequencies(column,'DECIMAL',split)
-        print(str(cate_count))
-        print(str(categories))
         objects = []
         utils = Utils()
         self.material = utils.create_shadeless_cycles_mat()
@@ -541,10 +481,7 @@ class HistogramVisualizer():
 
         return objects
         
-
     def animate_objects(self):
-        print("running animate_objects..")  
-
         duration = self.props.duration
         objects = self.bl_objects
         
@@ -553,27 +490,14 @@ class HistogramVisualizer():
 
         # calculated length of animation per object.
         animate = duration
-        
         offset = float(duration) / float(len(objects))
         
         # Store the current frame so we can restore current frame state later.
         startFrame = bpy.context.scene.frame_current
-        
-        print ("duration in frames: " + str(duration))
-        print("amount of objects: " + str(len(objects)))
-        print("offset per object: " + str(offset))
-        print("animate per object: " + str(animate))
 
         current_offset = 0
         # Iterate over each data point and animate it.
         for (i, ob) in enumerate(objects):
-            print("----")
-            print("current frame is: " + str(bpy.context.scene.frame_current))
-            print("current offset is: " + str(offset))
-            print("current duration is: " + str(animate))
-            print("start frame is: " + str(bpy.context.scene.frame_current))
-            print("end frame is: " + str(bpy.context.scene.frame_current + animate))
-            
             bpy.context.scene.frame_current += animate
             ob.keyframe_insert(data_path="scale", index=-1)
 
@@ -595,9 +519,7 @@ class HistogramVisualizer():
 
         # Restore frame state    
         bpy.context.scene.frame_current = startFrame
-
-
-    
+   
     def draw(self, layout, context):
         box = layout.box()
         props = context.scene.import_csv.visprops
@@ -608,8 +530,10 @@ class HistogramVisualizer():
         box.prop(props, 'use_animate')
         if (props.use_animate):
             box.prop(props, 'duration')
+  
             
-
+# PieVisualizer creates a pie chart
+# based on data frequency in a given column.
 class PieVisualizer():
 
     dataStore = None
@@ -644,7 +568,6 @@ class PieVisualizer():
 
         for v in bm.verts:
             if (prev_v and v.index < loop_dur):
-                #print('creating triangle: ' + str(v.index) + ': ' + str(v.co) + ', ' + str(prev_v.index) + ':' + str(prev_v.co) + ', ' + str(center_v.index) + ':' + str(center_v.co))
                 bm.faces.new([prev_v, v, center_v])
             prev_v = v
         
@@ -661,15 +584,12 @@ class PieVisualizer():
             ob.rotation_euler = (0,0,0)
 
     def create_blender_objects(self):
-        print("create_blender_objects..")
         headers = self.dataStore.headers
         objects = []
         split = self.props.split
         color = self.props.color
         column = self.props.column -1
         cate_count, categories = self.dataStore.get_frequencies(column,'DEGREES',split)
-        print(str(cate_count))
-        print(str(categories))
         utils = Utils()
         self.material = utils.create_shadeless_cycles_mat()
         
@@ -690,12 +610,10 @@ class PieVisualizer():
         objects.append(text)
         colors = []
         colors = utils.create_adjacent_colors(color, len(categories))        
-        print(colors)
         # Create  pie pieces for each category
         # Create labels to put next to the pie pieces
         rotation = 0
         for i in range(len(categories)):
-            print(colors[i])
             material = utils.create_shadeless_cycles_mat(colors[i],str(i))
             # Create pie chart
             bpy.ops.object.select_all(action='DESELECT')
@@ -731,9 +649,7 @@ class PieVisualizer():
 
         return objects
 
-    def animate_objects(self):
-        print("running animate_objects..")             
-
+    def animate_objects(self):         
         duration = self.props.duration
         objects = self.bl_objects
         
@@ -747,21 +663,9 @@ class PieVisualizer():
         # Store the current frame so we can restore current frame state later.
         startFrame = bpy.context.scene.frame_current
         
-        print ("duration in frames: " + str(duration))
-        print("amount of objects: " + str(len(objects)))
-        print("offset per object: " + str(offset))
-        print("animate per object: " + str(animate))
-
         current_offset = 0
         # Iterate over each data point and animate it.
-        for (i, ob) in enumerate(objects):
-            print("----")
-            print("current frame is: " + str(bpy.context.scene.frame_current))
-            print("current offset is: " + str(offset))
-            print("current duration is: " + str(animate))
-            print("start frame is: " + str(bpy.context.scene.frame_current))
-            print("end frame is: " + str(bpy.context.scene.frame_current + animate))
-            
+        for (i, ob) in enumerate(objects):            
             bpy.context.scene.frame_current += animate
             ob.keyframe_insert(data_path="rotation_euler", index=-1)
             ob.keyframe_insert(data_path="scale", index=-1)
@@ -795,7 +699,10 @@ class PieVisualizer():
         if (props.use_animate):
             box.prop(props, 'duration')
         
-
+        
+# ScatterVisualizer creates a scatter plot
+# by mapping the contents of 1-3 data columns
+# to the X, Y or Z location of an object.
 class ScatterVisualizer(): 
     
     dataStore = None
@@ -811,8 +718,6 @@ class ScatterVisualizer():
             self.animate_objects()
 
     def create_blender_objects(self):
-        print("create_blender_objects..")
-
         # Ensure no objects are selected in the scene before proceeding.
         bpy.ops.object.select_all(action='DESELECT')
         bpy.context.scene.objects.active = None
@@ -841,13 +746,10 @@ class ScatterVisualizer():
             ob.location = (0,0,0)
 
             if (self.props.use_column):
-                print("X-Axis: " + str(data[columnX][i]))
                 ob.location.x = data[columnX][i]
             if (self.props.use_column2):        
-                print("Y-Axis: " + str(data[columnY][i]))        
                 ob.location.y = data[columnY][i]
-            if (self.props.use_column3):
-                print("Z-Axis: " + str(data[columnZ][i]))        
+            if (self.props.use_column3):        
                 ob.location.z = data[columnZ][i]
             objects.append(ob) 
 
@@ -863,8 +765,6 @@ class ScatterVisualizer():
         return objects
     
     def animate_objects(self):
-        print("running animate_objects..")
-        
         duration = self.props.duration
         
         # calculated length of animation per object.
@@ -881,20 +781,9 @@ class ScatterVisualizer():
         # Store the current frame so we can restore current frame state later.
         startFrame = bpy.context.scene.frame_current
         
-        print ("duration in frames: " + str(duration))
-        print("amount of objects: " + str(len(objects)))
-        print("offset per object: " + str(offset))
-
         current_offset = 0
         # Iterate over each data point and animate it.
         for (i, ob) in enumerate(objects):
-            print("----")
-            print("current frame is: " + str(bpy.context.scene.frame_current))
-            print("current offset is: " + str(offset))
-            print("current duration is: " + str(animate))
-            print("start frame is: " + str(bpy.context.scene.frame_current))
-            print("end frame is: " + str(bpy.context.scene.frame_current + animate))
-            
             # Insert end keyframe
             bpy.context.scene.frame_current += animate
             ob.keyframe_insert(data_path="location", index=-1)
@@ -940,12 +829,13 @@ class ScatterVisualizer():
             col.enabled = False
 
         box.prop_search(props, "point_object", scene, "objects",text="Object")
-        # TODO: Expose how things should be mapped also
         box.prop(props, 'use_animate')
         if (props.use_animate):
             box.prop(props, 'duration')
-            # TODO: Expose Animation Type
-    
+
+
+# CSVReader detects the format of CSV files and 
+# adds them to a DataStorage object.
 class CSVReader():
 
     filepath = None
@@ -955,9 +845,6 @@ class CSVReader():
 
     def __init__(self, f):
         self.filepath = f
-        # detect delimiter
-        # detect quotechar
-        # detect_labels
 
     def __detect_delimiter(self, f):    
         commacount = 0
@@ -988,8 +875,6 @@ class CSVReader():
             if (i == 20):
                 break
             
-        print('quotecount ' + str(quotecount))
-        print('singlequotecount ' + str(singlequotecount))
         if (singlequotecount > quotecount):
             self.quotechar = "'"
         else:
@@ -1028,7 +913,6 @@ class CSVReader():
             for (y,val) in enumerate(col):
                 if (y == 0):
                     continue
-                #print('comparing ' + str(x) + str(0) + ':' + str(data[x][0]) + ' with ' + str(x) + str(y) + ':' + str(val))
                 if (data[x][0] == val):
                     matches += 1
 
@@ -1047,7 +931,6 @@ class CSVReader():
         return
 
     def parse_csv(self, context, filepath):
-        print("running parse_csv...")
         f = open(filepath, 'r', encoding='utf-8')
         self.__detect_delimiter(f)
         self.__detect_quotechar(f)
@@ -1061,7 +944,6 @@ class CSVReader():
 
         # If we have detected labels, skip the header
         if (self.__headers is not None):
-            print("detected headers: " + str(self.__headers))
             dataStore.headers = self.__headers
             reader.__next__()
 
@@ -1072,6 +954,9 @@ class CSVReader():
         # you can access the data using dataStore.get_rows()[x,y]
         return dataStore
 
+# VisualizationProperties is a PropertyGroup which
+# stores UI options in the bpy structure so they
+# can be drawn by the different visualizers.
 class VisualizationProperties(PropertyGroup):
     duration = IntProperty(
             name="Duration",
@@ -1091,8 +976,6 @@ class VisualizationProperties(PropertyGroup):
             default=True,
             )
             
-    # TODO: Adapt UI depending on the file selected
-    #       and use actual header names to choose column
     column = IntProperty(
         name="Column",
         description="Choose which column of data in the .csv to use",
@@ -1143,6 +1026,9 @@ class VisualizationProperties(PropertyGroup):
                                 subtype='COLOR', 
                                 default=[0.35,0.49,0.78])      
 
+# ImportCSVProperties is a PropertyGroup
+# which instantiates VisualizationProperties
+# and stores UI drawn by ImportCSV.
 class ImportCSVProperties(PropertyGroup):
     visprops = bpy.props.PointerProperty(type=VisualizationProperties)
 
@@ -1175,12 +1061,13 @@ class ImportCSVProperties(PropertyGroup):
     vis_index = bpy.props.IntProperty()
 
 
+# ImportCSV is the Operator class responsible for integrating
+# the plug-in with Blender and provides the main flow
+# of execution in execute().
 # ImportHelper is a helper class, defines filename and
 # invoke() function which calls the file selector.
-
 class ImportCSV(Operator, ImportHelper):
     """Imports statistical data (.csv) to visualize as graphs."""
-    # Important since its how bpy.ops.import_scene.csv is constructed
     bl_idname = "import_scene.csv"
     bl_label = "Import Statistical Data"
 
@@ -1238,8 +1125,5 @@ def unregister():
 
 if __name__ == "__main__":
     register()
-    
-    # test call
-    bpy.ops.import_scene.csv('INVOKE_DEFAULT')
 
 
