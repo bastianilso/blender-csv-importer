@@ -218,6 +218,7 @@ class DataStorage():
         data = self.data
         cate_count = []
         categories = []
+        
         if (utils.is_number(data[column][0])):
             cate_count, categories = self.get_numeric_frequencies(column, split)
         else:
@@ -276,7 +277,8 @@ class ObjectVisualizer():
             user_object = bpy.context.object
             individual_offset = 0.3
             offset = 0.5
-            self.material = utils.create_shadeless_cycles_mat()
+            if (bpy.context.scene.render.engine == 'CYCLES'):
+                self.material = utils.create_shadeless_cycles_mat()
 
         scene = bpy.context.scene
 
@@ -418,7 +420,8 @@ class HistogramVisualizer():
         cate_count, categories = self.dataStore.get_frequencies(column,'DECIMAL',split)
         objects = []
         utils = Utils()
-        self.material = utils.create_shadeless_cycles_mat()
+        if (bpy.context.scene.render.engine == 'CYCLES'):
+            self.material = utils.create_shadeless_cycles_mat()
     
         # Create a block piece for each category
         # Create labels to put underneath each block
@@ -591,7 +594,8 @@ class PieVisualizer():
         column = self.props.column -1
         cate_count, categories = self.dataStore.get_frequencies(column,'DEGREES',split)
         utils = Utils()
-        self.material = utils.create_shadeless_cycles_mat()
+        if (bpy.context.scene.render.engine == 'CYCLES'):
+            self.material = utils.create_shadeless_cycles_mat()
         
         # Create visualization title
         bpy.ops.object.select_all(action='DESELECT')
@@ -614,7 +618,9 @@ class PieVisualizer():
         # Create labels to put next to the pie pieces
         rotation = 0
         for i in range(len(categories)):
-            material = utils.create_shadeless_cycles_mat(colors[i],str(i))
+            material = None
+            if (bpy.context.scene.render.engine == 'CYCLES'):
+                material = utils.create_shadeless_cycles_mat(colors[i],str(i))
             # Create pie chart
             bpy.ops.object.select_all(action='DESELECT')
             bpy.context.scene.objects.active = None
