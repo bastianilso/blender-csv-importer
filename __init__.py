@@ -60,28 +60,36 @@ class Utils():
 
     # Based on:
     # https://gifguide2code.wordpress.com/2017/04/09/python-how-to-code-materials-in-blender-cycles/
-    def create_shadeless_cycles_mat(self,color=(0.08,0.09,0.1),id=''):
+    def create_shadeless_mat(self,color=(0.08,0.09,0.1),id='Visualization'):
         # initialize node
-        mat_name = "VisualizationMat" + id
-        mat = bpy.data.materials.new(mat_name)
-        bpy.data.materials[mat_name].use_nodes = True
-        
-        # connect emission node with material output node
-        bpy.data.materials[mat_name].node_tree.nodes.new(type='ShaderNodeEmission')
-        inp = bpy.data.materials[mat_name].node_tree.nodes['Material Output'].inputs['Surface']
-        outp = bpy.data.materials[mat_name].node_tree.nodes['Emission'].outputs['Emission']
-        bpy.data.materials[mat_name].node_tree.links.new(inp,outp)
+        mat_name = id
+        num = 1
 
-        # connect light path node to emission node
-        bpy.data.materials[mat_name].node_tree.nodes.new(type='ShaderNodeLightPath')
-        inp = bpy.data.materials[mat_name].node_tree.nodes['Emission'].inputs['Strength']
-        outp = bpy.data.materials[mat_name].node_tree.nodes['Light Path'].outputs['Is Camera Ray']
-        bpy.data.materials[mat_name].node_tree.links.new(inp,outp)
-
-        # Change emission color
-        bpy.data.materials[mat_name].node_tree.nodes['Emission'].inputs['Color'].default_value = (color[0],color[1],color[2],1.0)
+        while (mat_name in bpy.data.materials):
+            mat_name = id + '.' + str(num)
+            num += 1
+            
+        bpy.data.materials.new(mat_name)
         bpy.data.materials[mat_name].diffuse_color = color
+        bpy.data.materials[mat_name].diffuse_intensity = 1.0
         bpy.data.materials[mat_name].use_shadeless = True
+        
+        if (bpy.context.scene.render.engine == 'CYCLES'):
+            bpy.data.materials[mat_name].use_nodes = True
+            # connect emission node with material output node
+            bpy.data.materials[mat_name].node_tree.nodes.new(type='ShaderNodeEmission')
+            inp = bpy.data.materials[mat_name].node_tree.nodes['Material Output'].inputs['Surface']
+            outp = bpy.data.materials[mat_name].node_tree.nodes['Emission'].outputs['Emission']
+            bpy.data.materials[mat_name].node_tree.links.new(inp,outp)
+
+            # connect light path node to emission node
+            bpy.data.materials[mat_name].node_tree.nodes.new(type='ShaderNodeLightPath')
+            inp = bpy.data.materials[mat_name].node_tree.nodes['Emission'].inputs['Strength']
+            outp = bpy.data.materials[mat_name].node_tree.nodes['Light Path'].outputs['Is Camera Ray']
+            bpy.data.materials[mat_name].node_tree.links.new(inp,outp)
+
+            # Change emission color
+            bpy.data.materials[mat_name].node_tree.nodes['Emission'].inputs['Color'].default_value = (color[0],color[1],color[2],1.0)
         
         return bpy.data.materials[mat_name]
 
@@ -278,8 +286,7 @@ class ObjectVisualizer():
             user_object = bpy.context.object
             individual_offset = 0.3
             offset = 0.5
-            if (bpy.context.scene.render.engine == 'CYCLES'):
-                self.material = utils.create_shadeless_cycles_mat()
+            self.material = utils.create_shadeless_mat(id='ObjectVisualization')
 
         scene = bpy.context.scene
 
@@ -422,8 +429,7 @@ class HistogramVisualizer():
         cate_count, categories = self.dataStore.get_frequencies(column,'DECIMAL',split)
         objects = []
         utils = Utils()
-        if (bpy.context.scene.render.engine == 'CYCLES'):
-            self.material = utils.create_shadeless_cycles_mat()
+        self.material = utils.create_shadeless_mat(id='HistogramVisualization'+str(column))
     
         # Create a block piece for each category
         # Create labels to put underneath each block
@@ -597,8 +603,7 @@ class PieVisualizer():
         column = min(self.props.column, len(data)) -1
         cate_count, categories = self.dataStore.get_frequencies(column,'DEGREES',split)
         utils = Utils()
-        if (bpy.context.scene.render.engine == 'CYCLES'):
-            self.material = utils.create_shadeless_cycles_mat()
+        self.material = utils.create_shadeless_mat(color,id='PieVisualization'+str(column))
         
         # Create visualization title
         bpy.ops.object.select_all(action='DESELECT')
@@ -622,8 +627,7 @@ class PieVisualizer():
         rotation = 0
         for i in range(len(categories)):
             material = None
-            if (bpy.context.scene.render.engine == 'CYCLES'):
-                material = utils.create_shadeless_cycles_mat(colors[i],str(i))
+            material = utils.create_shadeless_mat(colors[i],id='Pie'+str(i))
             # Create pie chart
             bpy.ops.object.select_all(action='DESELECT')
             bpy.context.scene.objects.active = None
@@ -1143,5 +1147,4 @@ def unregister():
 
 if __name__ == "__main__":
     register()
-
 
