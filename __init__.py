@@ -730,36 +730,47 @@ class ScatterVisualizer():
         # Ensure no objects are selected in the scene before proceeding.
         bpy.ops.object.select_all(action='DESELECT')
         bpy.context.scene.objects.active = None
-        # Create array to store the blender objects
+        # Create dictionary to store the blender objects
         objects = []
+        object_dict = {}
         utils = Utils()
 
         data = self.dataStore.get_columns('AS_NUMERIC')
         columnX = min(self.props.column, len(data))-1
         columnY = min(self.props.column2, len(data))-1
         columnZ = min(self.props.column3, len(data))-1
-        
+
         # Iterate over the data and create blender objects for each datapoint.
         # For now we assume the first three columns correspond to X Y Z
         for i in range(len(data[0])):
-            # did the user specify an object? otherwise create placeholder objects.
-            if self.props.point_object:
-                bpy.ops.object.add_named(name=self.props.point_object,linked=True)
+            x = data[columnX][i] if self.props.use_column else 0
+            y = data[columnY][i] if self.props.use_column2 else 0
+            z = data[columnZ][i] if self.props.use_column3 else 0 
+            
+            # if datapoint already exists, increase its scale
+            if x+y+z in object_dict:
+                object_dict[x+y+z].scale += Vector((0.5,0.5,0.5))
             else:
-                bpy.ops.object.add(radius=0.1, location=(0,0,0))
+                # create either user_specified object or placeholder objects            
+                if self.props.point_object:
+                    bpy.ops.object.add_named(name=self.props.point_object,linked=True)
+                else:
+                    bpy.ops.object.add(radius=0.1)
 
-            ob = bpy.context.object
-            ob.name="dataPoint" + str(i)
+                ob = bpy.context.object
+                ob.name="dataPoint" + str(i)
 
-            ob.location = (0,0,0)
+                ob.location = (0,0,0)
 
-            if (self.props.use_column):
-                ob.location.x = data[columnX][i]
-            if (self.props.use_column2):        
-                ob.location.y = data[columnY][i]
-            if (self.props.use_column3):        
-                ob.location.z = data[columnZ][i]
-            objects.append(ob) 
+                if (self.props.use_column):
+                    ob.location.x = x
+                if (self.props.use_column2):        
+                    ob.location.y = y
+                if (self.props.use_column3):        
+                    ob.location.z = z
+
+                objects.append(ob)
+                object_dict[x+y+z] = ob
 
         # Create Parent Empty
         bpy.ops.object.select_all(action='DESELECT')
@@ -771,7 +782,7 @@ class ScatterVisualizer():
             objects[i].matrix_parent_inverse = ob.matrix_world.inverted()
             
         return objects
-    
+
     def animate_objects(self):
         duration = self.props.duration
         
