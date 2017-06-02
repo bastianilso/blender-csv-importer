@@ -1094,9 +1094,8 @@ class ImportCSV(Operator, ImportHelper):
     filename_ext = {".csv", ".tsv"}
 
     filter_glob = StringProperty(
-            default={"*.csv", ".tsv"},
+            default="*.csv;*.tsv",
             options={'HIDDEN'},
-            maxlen=255,  # Max internal buffer length, longer would be clamped.
             )
         
     def execute(self, context):   
