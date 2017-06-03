@@ -861,13 +861,9 @@ class ScatterVisualizer():
 # adds them to a DataStorage object.
 class CSVReader():
 
-    filepath = None
     delimiter = ','
     quotechar = ''
     __headers = None
-
-    def __init__(self, f):
-        self.filepath = f
 
     def __detect_delimiter(self, f):    
         commacount = 0
@@ -1103,7 +1099,7 @@ class ImportCSV(Operator, ImportHelper):
             )
         
     def execute(self, context):   
-        reader = CSVReader(self.filepath)
+        reader = CSVReader()
         dataStore = reader.parse_csv(context, self.filepath)
         
         current = context.scene.import_csv.vis_index
