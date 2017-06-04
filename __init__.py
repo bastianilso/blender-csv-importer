@@ -1101,7 +1101,7 @@ class ImportCSV(Operator, ImportHelper):
     def execute(self, context):
         w = bpy.context.window
         w.cursor_set('WAIT')
-        reader = CSVReader(self.filepath)
+        reader = CSVReader()
         dataStore = reader.parse_csv(context, self.filepath)
         
         current = context.scene.import_csv.vis_index
