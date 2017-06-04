@@ -861,13 +861,9 @@ class ScatterVisualizer():
 # adds them to a DataStorage object.
 class CSVReader():
 
-    filepath = None
     delimiter = ','
     quotechar = ''
     __headers = None
-
-    def __init__(self, f):
-        self.filepath = f
 
     def __detect_delimiter(self, f):    
         commacount = 0
