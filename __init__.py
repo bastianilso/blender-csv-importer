@@ -1,7 +1,7 @@
 bl_info = {  
  "name": "Import Statistical Data (*.csv)",  
  "author": "Bastian Ilso (bastianilso)",  
- "version": (0, 2),  
+ "version": (0, 3),  
  "blender": (2, 7, 8),  
  "location": "File > Import > Import Statistical Data (*.csv)",  
  "description": "Import, visualize and animate data stored as *.csv",  
@@ -13,7 +13,7 @@ bl_info = {
 import bpy
 from bpy_extras.io_utils import ImportHelper
 from bpy.props import StringProperty, BoolProperty, EnumProperty, IntProperty, PointerProperty, FloatVectorProperty
-from bpy.types import Operator, PropertyGroup
+from bpy.types import Operator, PropertyGroup, Object                                                                                                                                                                                                                                                                                   
 import csv
 import bmesh
 import random
@@ -21,6 +21,10 @@ from math import radians, degrees
 from mathutils import Vector, Color
 from collections import Counter
 
+def dump(obj):
+   for attr in dir(obj):
+       if hasattr( obj, attr ):
+           print( "obj.%s = %s" % (attr, getattr(obj, attr)))
 
 class Utils():
 
@@ -256,13 +260,16 @@ class ObjectVisualizer():
     props = None
     user_object = None
     material = None
+    props = None
     
     def visualize(self, dataStorage):
         self.dataStore = dataStorage
-        self.props = bpy.context.scene.import_csv.visprops
+        self.props = bpy.context.active_object.import_csv.visprops   
         self.bl_objects = self.create_blender_objects()
         if (self.props.use_animate):
             self.animate_objects()
+
+        return self.bl_objects
 
     def create_blender_objects(self):
         headers = self.dataStore.headers
@@ -283,7 +290,7 @@ class ObjectVisualizer():
             self.material = user_object.active_material
         else:
             bpy.ops.object.add(radius=0.1)
-            user_object = bpy.context.object
+            user_object = bpy.context.active_object
             individual_offset = 0.3
             offset = 0.5
             self.material = utils.create_shadeless_mat(id='ObjectVisualization')
@@ -318,7 +325,7 @@ class ObjectVisualizer():
             bpy.context.scene.objects.active = None
             cate_middle = (prev_abs_x + abs_x - 2*(offset + individual_offset)) / 2
             bpy.ops.object.text_add(location=(cate_middle, -0.7, 0))
-            text = bpy.context.object
+            text = bpy.context.active_object
             text.data.align_x = 'CENTER'
             text.scale = (text.scale.x * 0.15,text.scale.y * 0.15, text.scale.z * 0.15)
             text.name ="label" + str(categories[i])
@@ -332,7 +339,7 @@ class ObjectVisualizer():
         bpy.ops.object.select_all(action='DESELECT')
         bpy.context.scene.objects.active = None
         bpy.ops.object.text_add(location=(middle, -1.1, 0))
-        text = bpy.context.object
+        text = bpy.context.active_object
         text.data.align_x = 'CENTER'
         text.scale = (text.dimensions.x * 0.30,text.dimensions.y * 0.30, text.dimensions.z * 0.30)
         bpy.ops.object.transform_apply(scale=True)
@@ -344,15 +351,6 @@ class ObjectVisualizer():
             text.data.body = "Comparison"
         text.active_material = self.material
         objects.append(text)
-
-        # Create Parent Empty
-        bpy.ops.object.select_all(action='DESELECT')
-        bpy.context.scene.objects.active = None        
-        bpy.ops.object.add(radius=0.5, location=(0,text.location.y,0))
-        ob = bpy.context.object
-        for i in range(len(objects)):
-            objects[i].parent = ob
-            objects[i].matrix_parent_inverse = ob.matrix_world.inverted()
 
         utils.normalize_objects(objects, scale=10)    
 
@@ -389,9 +387,8 @@ class ObjectVisualizer():
         # Restore frame state    
         bpy.context.scene.frame_current = startFrame
         
-    def draw(self, layout, context):
+    def draw(self, layout, context, props):
         box = layout.box()
-        props = context.scene.import_csv.visprops
         scene = context.scene
 
         box.prop_search(props, "point_object", scene, "objects",text="Object")
@@ -409,15 +406,17 @@ class HistogramVisualizer():
 
     dataStore = None
     bl_objects = None
-    props = None
     material = None
+    props = None
 
     def visualize(self, dataStorage):
         self.dataStore = dataStorage
-        self.props = bpy.context.scene.import_csv.visprops
+        self.props = bpy.context.active_object.import_csv.visprops   
         self.bl_objects = self.create_blender_objects()
         if (self.props.use_animate):
             self.animate_objects()
+
+        return self.bl_objects
 
     def create_blender_objects(self):
         headers = self.dataStore.headers
@@ -439,7 +438,7 @@ class HistogramVisualizer():
             bpy.ops.object.select_all(action='DESELECT')
             bpy.context.scene.objects.active = None
             bpy.ops.mesh.primitive_plane_add(radius=0.5, location=(0, 0, 0))
-            ob = bpy.context.object
+            ob = bpy.context.active_object
             ob.name ="block" + str(categories[i])
             bpy.context.scene.cursor_location = (0,-0.5,0)
             bpy.ops.object.origin_set(type='ORIGIN_CURSOR')
@@ -452,7 +451,7 @@ class HistogramVisualizer():
             bpy.ops.object.select_all(action='DESELECT')
             bpy.context.scene.objects.active = None
             bpy.ops.object.text_add(location=(location_x, -0.7, 0))
-            text = bpy.context.object
+            text = bpy.context.active_object
             text.data.align_x = 'CENTER'
             text.scale = (text.scale.x * 0.15,text.scale.y * 0.15, text.scale.z * 0.15)
             text.name ="label" + str(categories[i])
@@ -469,7 +468,7 @@ class HistogramVisualizer():
         bpy.ops.object.select_all(action='DESELECT')
         bpy.context.scene.objects.active = None
         bpy.ops.object.text_add(location=(middle, -1.1, 0))
-        text = bpy.context.object
+        text = bpy.context.active_object
         text.data.align_x = 'CENTER'
         text.scale = (text.scale.x * 0.30,text.scale.y * 0.30, text.scale.z * 0.30)
         if (headers is not None):
@@ -480,15 +479,6 @@ class HistogramVisualizer():
             text.data.body = "Histogram"
         text.active_material = self.material
         objects.append(text)
-
-        # Create Parent Empty
-        bpy.ops.object.select_all(action='DESELECT')
-        bpy.context.scene.objects.active = None        
-        bpy.ops.object.add(radius=0.25, location=(0,text.location.y,0))
-        ob = bpy.context.object
-        for i in range(len(objects)):
-            objects[i].parent = ob
-            objects[i].matrix_parent_inverse = ob.matrix_world.inverted()
 
         return objects
         
@@ -531,10 +521,8 @@ class HistogramVisualizer():
         # Restore frame state    
         bpy.context.scene.frame_current = startFrame
    
-    def draw(self, layout, context):
+    def draw(self, layout, context, props):
         box = layout.box()
-        props = context.scene.import_csv.visprops
-        scene = context.scene
         
         box.prop(props, 'column')
         box.prop(props, 'split')
@@ -550,15 +538,17 @@ class PieVisualizer():
     dataStore = None
     bl_objects = None
     bl_labels = None
-    props = None
     material = None
+    props = None
 
     def visualize(self, dataStorage):
         self.dataStore = dataStorage
-        self.props = bpy.context.scene.import_csv.visprops
+        self.props = bpy.context.active_object.import_csv.visprops        
         self.bl_objects = self.create_blender_objects()
         if (self.props.use_animate):
             self.animate_objects()
+
+        return self.bl_objects
 
     def pie_cutout(self, circle, degrees):
         mesh = circle.data
@@ -609,7 +599,8 @@ class PieVisualizer():
         bpy.ops.object.select_all(action='DESELECT')
         bpy.context.scene.objects.active = None
         bpy.ops.object.text_add(location=(0, 1.30, 0))
-        text = bpy.context.object
+        # file:///home/bastian/Sync/P8/Multi-media%20Programming/blender_python_reference_2_78a_release/bpy.types.BlendDataObjects.html?highlight=data%20objects%20new#bpy.types.BlendDataObjects.new
+        text = bpy.context.active_object
         text.data.align_x = 'CENTER'
         text.scale = (text.scale.x * 0.30,text.scale.y * 0.30, text.scale.z * 0.30)
         if (headers is not None):
@@ -632,7 +623,7 @@ class PieVisualizer():
             bpy.ops.object.select_all(action='DESELECT')
             bpy.context.scene.objects.active = None
             bpy.ops.mesh.primitive_circle_add(vertices=360, radius=1, fill_type='NOTHING', location=(0, 0, 0))
-            circle = bpy.context.object
+            circle = bpy.context.active_object
             circle.name ="pie" + str(categories[i])
             self.pie_cutout(circle, cate_count[i])
             circle.rotation_euler = (0,0, rotation)
@@ -642,7 +633,7 @@ class PieVisualizer():
             bpy.ops.object.select_all(action='DESELECT')
             bpy.context.scene.objects.active = None
             bpy.ops.object.text_add(location=(0, 0, 0))
-            text = bpy.context.object
+            text = bpy.context.active_object
             text.name ="label" + str(categories[i])
             self.set_text_labels(text, categories[i], rotation, radians(cate_count[i]))
             text.active_material = material
@@ -650,15 +641,6 @@ class PieVisualizer():
             objects.append(text)
 
             rotation += radians(cate_count[i])
-
-        # Create Parent Empty
-        bpy.ops.object.select_all(action='DESELECT')
-        bpy.context.scene.objects.active = None        
-        bpy.ops.object.add(radius=0.25, location=(0,0,0))
-        ob = bpy.context.object
-        for i in range(len(objects)):
-            objects[i].parent = ob
-            objects[i].matrix_parent_inverse = ob.matrix_world.inverted()
 
         return objects
 
@@ -700,10 +682,8 @@ class PieVisualizer():
         bpy.context.scene.frame_current = startFrame
 
 
-    def draw(self, layout, context):
+    def draw(self, layout, context, props):
         box = layout.box()
-        props = context.scene.import_csv.visprops
-        scene = context.scene
         
         box.prop(props, 'column')
         box.prop(props, 'split')
@@ -720,15 +700,18 @@ class ScatterVisualizer():
     
     dataStore = None
     bl_objects = None
-    props = None
     material = None
+    props = None
 
     def visualize(self, dataStorage):
         self.dataStore = dataStorage
-        self.props = bpy.context.scene.import_csv.visprops
+        self.props = bpy.context.active_object.import_csv.visprops
         self.bl_objects = self.create_blender_objects()
+            
         if (self.props.use_animate):
             self.animate_objects()
+        
+        return self.bl_objects
 
     def create_blender_objects(self):
         # Ensure no objects are selected in the scene before proceeding.
@@ -761,7 +744,7 @@ class ScatterVisualizer():
                 else:
                     bpy.ops.object.add(radius=0.1)
 
-                ob = bpy.context.object
+                ob = bpy.context.active_object
                 ob.name="dataPoint" + str(i)
 
                 ob.location = (0,0,0)
@@ -775,16 +758,7 @@ class ScatterVisualizer():
 
                 objects.append(ob)
                 object_dict[x+y+z] = ob
-
-        # Create Parent Empty
-        bpy.ops.object.select_all(action='DESELECT')
-        bpy.context.scene.objects.active = None        
-        bpy.ops.object.add(radius=0.25, location=(0,0,0))
-        ob = bpy.context.object
-        for i in range(len(objects)):
-            objects[i].parent = ob
-            objects[i].matrix_parent_inverse = ob.matrix_world.inverted()
-            
+        
         return objects
 
     def animate_objects(self):
@@ -825,10 +799,9 @@ class ScatterVisualizer():
         # Restore frame state    
         bpy.context.scene.frame_current = startFrame
 
-    def draw(self, layout, context):
-        box = layout.box()
-        props = context.scene.import_csv.visprops
+    def draw(self, layout, context, props):
         scene = context.scene
+        box = layout.box()
         
         row = box.row(align=True)
         row.prop(props, 'use_column')
@@ -1055,7 +1028,8 @@ class ImportCSVProperties(PropertyGroup):
         # We change visualizer using an index because
         # changing the visualizer itself is not possible from here
         # since objects and string are immutable in python.
-        props = bpy.context.scene.import_csv
+        print('I was called')
+        props = bpy.context.active_object.import_csv
         if (other.type == 'OPT_SCATTER'):
             props.vis_index = 0
         elif (other.type == 'OPT_PIE'):
@@ -1065,6 +1039,16 @@ class ImportCSVProperties(PropertyGroup):
         elif (other.type == 'OPT_OBJ'):
             props.vis_index = 3
         return None
+
+    def update_filepath (other, context):
+        print('I was called')
+        props = bpy.context.active_object.import_csv
+        if (other.type == 'OPT_SCATTER'):
+            props.vis_index = 0
+
+        #dump(other)
+        #print("called")
+        #bpy.ops.import_scene.csv('EXEC_DEFAULT', filepath=other.filepath)
         
     type = EnumProperty(
             name="Type",
@@ -1076,6 +1060,14 @@ class ImportCSVProperties(PropertyGroup):
             default='OPT_SCATTER',
             update=update_visualizer
             )
+            
+    filepath = bpy.props.StringProperty(
+            name="CSV File",
+            default="",
+            description="The source CSV file being visualized",
+            update=update_filepath
+            )            
+            
     visualizers = [ScatterVisualizer(), PieVisualizer(), HistogramVisualizer(), ObjectVisualizer()]
     vis_index = bpy.props.IntProperty()
 
@@ -1097,29 +1089,128 @@ class ImportCSV(Operator, ImportHelper):
             default="*.csv;*.tsv",
             options={'HIDDEN'},
             )
-        
+            
+    _parent = None
+
+
     def execute(self, context):
-        w = bpy.context.window
+        w = context.window
         w.cursor_set('WAIT')
-        reader = CSVReader()
-        dataStore = reader.parse_csv(context, self.filepath)
         
-        current = context.scene.import_csv.vis_index
-        visualizer = context.scene.import_csv.visualizers[current]
-        visualizer.visualize(dataStore)
+        if not self._parent:
+            self._parent = bpy.context.active_object
+
+        bpy.ops.object.select_all(action='DESELECT')
+        bpy.context.scene.objects.active = None        
+        
+        if self._parent.children:
+            print("delete the children!")
+            for child in self._parent.children:
+                child.select = True    
+            bpy.ops.object.delete()
+            
+        self._parent.select = True
+        bpy.context.scene.objects.active = self._parent
+
+        filepath = None
+        if self.filepath:
+            filepath = self.filepath
+            self._parent.import_csv.filepath = filepath
+        elif self._parent.import_csv.filepath:
+            filepath = self._parent.import_csv.filepath
+        
+        if filepath:
+            reader = CSVReader()
+            dataStore = reader.parse_csv(context, filepath)
+            vis_index = self._parent.import_csv.vis_index
+            visualizer = self._parent.import_csv.visualizers[vis_index]
+
+            visualization = visualizer.visualize(dataStore)
+            for i in range(len(visualization)):
+                visualization[i].parent = self._parent
+                visualization[i].matrix_parent_inverse = self._parent.matrix_world.inverted()
+
+        bpy.context.scene.objects.active = self._parent
+        self._parent.select = True
         w.cursor_set('DEFAULT')        
         return {'FINISHED'}
     
+    def invoke(self, context, event):
+        # Create Parent Empty
+        if bpy.context.active_object and bpy.context.active_object.visualization:
+            self._parent = bpy.context.active_object
+        else:
+            bpy.ops.object.select_all(action='DESELECT')
+            bpy.context.scene.objects.active = None        
+            bpy.ops.object.add(radius=0.25, location=(0,0,0))
+            bpy.context.active_object.visualization = True
+            bpy.context.active_object.name = 'VisualizationEmpty'
+            self._parent = bpy.context.active_object
+
+        ImportHelper.invoke(self, context, event)
+        return {'RUNNING_MODAL'}
+    
     def draw(self, context):
         layout = self.layout
-        scene = context.scene
-        props = scene.import_csv
+        props = self._parent.import_csv
 
         box = layout.box()
         box.prop(props, 'type')
         if (props.visualizers):
-            props.visualizers[props.vis_index].draw(layout, context)
+            props.visualizers[props.vis_index].draw(layout, context, props.visprops)
+
+
+# AddVisualization is an operator called from the 
+# Add menu in Blender. It creates an empty with a
+# visualization settings available in the data panel.
+class AddVisualization(Operator):
+    """Add Visualization Empty"""
+    bl_idname = "empty.addvisualiazation"
+    bl_label = "Visualization"
+
+    def execute(self, context):
+        bpy.ops.object.select_all(action='DESELECT')
+        bpy.context.scene.objects.active = None        
+        bpy.ops.object.add(radius=0.25, location=(0,0,0))
+        ob = bpy.context.active_object
+        ob.visualization = True
+        ob.select = True
+        ob.name = 'VisualizationEmpty'        
+        return {'FINISHED'}
         
+
+class VisualizationData(bpy.types.Panel):
+    bl_label = "Visualization Data"
+    bl_idname = "SCENE_PT_vizdata"
+    bl_space_type = "PROPERTIES"
+    bl_region_type = "WINDOW"
+    bl_context = "data"
+
+    @classmethod
+    def poll(cls, context):
+        return (context.object and context.object.type == 'EMPTY' and context.object.visualization)
+    
+    def draw(self, context):
+        layout = self.layout
+        props = context.object.import_csv
+
+        col = layout.column()
+        row = col.row(align=True)
+        row.prop(props, 'filepath', text='CSV File')
+        layout.operator_context = 'INVOKE_DEFAULT'
+        row.operator("import_scene.csv", icon="FILESEL", text="")
+        layout.operator_context = 'EXEC_DEFAULT'    
+        row.operator("import_scene.csv", icon="FILE_REFRESH", text="")
+        
+        box = layout.box()
+        box.prop(props, 'type')
+        if (props.visualizers):
+            props.visualizers[props.vis_index].draw(layout, context, props.visprops)
+        
+
+def menu_func_add(self, context):    
+    self.layout.operator(AddVisualization.bl_idname, text="Visualization")
+
 
 def menu_func_import(self, context):    
     self.layout.operator(ImportCSV.bl_idname, text="Statistical Data (.csv)")
@@ -1127,20 +1218,30 @@ def menu_func_import(self, context):
 classes = (
     VisualizationProperties,
     ImportCSVProperties,
-    ImportCSV
+    ImportCSV,
+    VisualizationData,
+    AddVisualization
 )
 
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
     bpy.types.INFO_MT_file_import.append(menu_func_import)
-    bpy.types.Scene.import_csv = PointerProperty(type=ImportCSVProperties)
+    bpy.types.INFO_MT_add.append(menu_func_add)    
+    bpy.types.Object.import_csv = PointerProperty(type=ImportCSVProperties)
+    bpy.types.Object.visualization = BoolProperty(
+        name="Visualization Parent",
+        description="Determines whether object is parent to a visualization",
+        default=False,
+        )
 
 def unregister():
     for cls in classes:
         bpy.utils.unregister_class(cls)
 
     del bpy.types.Operator.import_csv
+    del bpy.types.Objects.visualization
+    del bpy.types.Objects.vis_data
     
     bpy.types.INFO_MT_file_import.remove(menu_func_import)
 
