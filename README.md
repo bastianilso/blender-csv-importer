@@ -1,7 +1,7 @@
 # Blender CSV Importer
 Create a data visualization by importing statistical data (.csv) into Blender. 
 
-![1) Pie Chart 2) Histogram 3) Object Visualizer 4) Scatter Plot](http://bastianilso.com/wp-content/uploads/2017/05/visualizers2.png)
+![1) Pie Chart 2) Histogram 3) Object Visualizer 4) Scatter Plot](http://bastianilso.com/wp-content/uploads/2018/05/visualizers.png)
 
 See the demo here: https://www.youtube.com/watch?v=ci_H17OG2r4
 
