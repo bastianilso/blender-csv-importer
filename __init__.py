@@ -2,7 +2,7 @@ bl_info = {
  "name": "Import Statistical Data (*.csv)",  
  "author": "Bastian Ilso (bastianilso)",  
  "version": (0, 3),  
- "blender": (2, 7, 8),  
+ "blender": (2, 80, 0),  
  "location": "File > Import > Import Statistical Data (*.csv)",  
  "description": "Import, visualize and animate data stored as *.csv",  
  "warning": "",
@@ -74,9 +74,7 @@ class Utils():
             num += 1
             
         bpy.data.materials.new(mat_name)
-        bpy.data.materials[mat_name].diffuse_color = color
-        bpy.data.materials[mat_name].diffuse_intensity = 1.0
-        bpy.data.materials[mat_name].use_shadeless = True
+        bpy.data.materials[mat_name].diffuse_color = (color[0],color[1],color[2],1.0)
         
         if (bpy.context.scene.render.engine == 'CYCLES'):
             bpy.data.materials[mat_name].use_nodes = True
@@ -300,7 +298,7 @@ class ObjectVisualizer():
         abs_x = 0
         for i in range(len(categories)): # Iterate over each category
             bpy.ops.object.select_all(action='DESELECT')
-            bpy.context.scene.objects.active = None
+            bpy.context.view_layer.objects.active = None
             
             # Create the objects
             location_y = 0
@@ -310,7 +308,7 @@ class ObjectVisualizer():
                     ob = user_object.copy()
                     ob.data = user_object.data
                     ob.animation_data_clear()
-                    scene.objects.link(ob)
+                    scene.collection.objects.link(ob)
                     ob.name = ob.name + str(categories[i])
                     ob.location = (location_x, location_y, 0)
                     location_x += ob.dimensions.x + individual_offset
@@ -322,7 +320,7 @@ class ObjectVisualizer():
                 
             # Create category labels
             bpy.ops.object.select_all(action='DESELECT')
-            bpy.context.scene.objects.active = None
+            bpy.context.view_layer.objects.active = None
             cate_middle = (prev_abs_x + abs_x - 2*(offset + individual_offset)) / 2
             bpy.ops.object.text_add(location=(cate_middle, -0.7, 0))
             text = bpy.context.active_object
@@ -337,12 +335,12 @@ class ObjectVisualizer():
         # Create visualization title
         middle = (((user_object.dimensions.x + individual_offset) * width + offset) * len(categories)-1) / 2
         bpy.ops.object.select_all(action='DESELECT')
-        bpy.context.scene.objects.active = None
+        bpy.context.view_layer.objects.active = None
         bpy.ops.object.text_add(location=(middle, -1.1, 0))
         text = bpy.context.active_object
         text.data.align_x = 'CENTER'
         text.scale = (text.dimensions.x * 0.30,text.dimensions.y * 0.30, text.dimensions.z * 0.30)
-        bpy.ops.object.transform_apply(scale=True)
+        #bpy.ops.object.transform_apply(scale=True)
         if (headers is not None):
             text.name ="title" + str(headers[column])
             text.data.body = headers[column]
@@ -436,11 +434,11 @@ class HistogramVisualizer():
         for i in range(len(categories)):
             # Create block
             bpy.ops.object.select_all(action='DESELECT')
-            bpy.context.scene.objects.active = None
-            bpy.ops.mesh.primitive_plane_add(radius=0.5, location=(0, 0, 0))
+            bpy.context.view_layer.objects.active = None
+            bpy.ops.mesh.primitive_plane_add(size=1.0, location=(0, 0, 0))
             ob = bpy.context.active_object
             ob.name ="block" + str(categories[i])
-            bpy.context.scene.cursor_location = (0,-0.5,0)
+            bpy.context.scene.cursor.location = (0,-0.5,0)
             bpy.ops.object.origin_set(type='ORIGIN_CURSOR')
             ob.scale = (ob.scale.x * 0.35,ob.scale.y * cate_count[i], ob.scale.z)
             bpy.ops.object.transform_apply(scale=True)
@@ -449,7 +447,7 @@ class HistogramVisualizer():
             
             # Create labels
             bpy.ops.object.select_all(action='DESELECT')
-            bpy.context.scene.objects.active = None
+            bpy.context.view_layer.objects.active = None
             bpy.ops.object.text_add(location=(location_x, -0.7, 0))
             text = bpy.context.active_object
             text.data.align_x = 'CENTER'
@@ -466,7 +464,7 @@ class HistogramVisualizer():
         # Create visualization title
         middle = (offset * len(categories)-1) / 2
         bpy.ops.object.select_all(action='DESELECT')
-        bpy.context.scene.objects.active = None
+        bpy.context.view_layer.objects.active = None
         bpy.ops.object.text_add(location=(middle, -1.1, 0))
         text = bpy.context.active_object
         text.data.align_x = 'CENTER'
@@ -578,10 +576,10 @@ class PieVisualizer():
     def set_text_labels(self, ob, label, min_rot, max_rot):
             ob.data.align_x = 'CENTER'
             ob.scale = (ob.scale.x * 0.15,ob.scale.y * 0.15, ob.scale.z * 0.15)
-            bpy.ops.object.transform_apply(scale=True)
+            #bpy.ops.object.transform_apply(scale=True)
             ob.data.body = label
             ob.rotation_euler = (0,0, (min_rot + (max_rot / 2) ) )
-            bpy.ops.transform.translate(value=(0, 1.5, 0), constraint_axis=(False, True, False), constraint_orientation='LOCAL')
+            #bpy.ops.transform.translate(value=(0, 1.5, 0), constraint_axis=(False, True, False), constraint_orientation='LOCAL')
             ob.rotation_euler = (0,0,0)
 
     def create_blender_objects(self):
@@ -597,7 +595,7 @@ class PieVisualizer():
         
         # Create visualization title
         bpy.ops.object.select_all(action='DESELECT')
-        bpy.context.scene.objects.active = None
+        bpy.context.view_layer.objects.active = None
         bpy.ops.object.text_add(location=(0, 1.30, 0))
         # file:///home/bastian/Sync/P8/Multi-media%20Programming/blender_python_reference_2_78a_release/bpy.types.BlendDataObjects.html?highlight=data%20objects%20new#bpy.types.BlendDataObjects.new
         text = bpy.context.active_object
@@ -621,7 +619,7 @@ class PieVisualizer():
             material = utils.create_shadeless_mat(colors[i],id='Pie'+str(i))
             # Create pie chart
             bpy.ops.object.select_all(action='DESELECT')
-            bpy.context.scene.objects.active = None
+            bpy.context.view_layer.objects.active = None
             bpy.ops.mesh.primitive_circle_add(vertices=360, radius=1, fill_type='NOTHING', location=(0, 0, 0))
             circle = bpy.context.active_object
             circle.name ="pie" + str(categories[i])
@@ -631,7 +629,7 @@ class PieVisualizer():
 
             # Create labels
             bpy.ops.object.select_all(action='DESELECT')
-            bpy.context.scene.objects.active = None
+            bpy.context.view_layer.objects.active = None
             bpy.ops.object.text_add(location=(0, 0, 0))
             text = bpy.context.active_object
             text.name ="label" + str(categories[i])
@@ -716,7 +714,7 @@ class ScatterVisualizer():
     def create_blender_objects(self):
         # Ensure no objects are selected in the scene before proceeding.
         bpy.ops.object.select_all(action='DESELECT')
-        bpy.context.scene.objects.active = None
+        bpy.context.view_layer.objects.active = None
         # Create dictionary to store the blender objects
         objects = []
         object_dict = {}
@@ -1101,16 +1099,16 @@ class ImportCSV(Operator, ImportHelper):
             self._parent = bpy.context.active_object
 
         bpy.ops.object.select_all(action='DESELECT')
-        bpy.context.scene.objects.active = None        
+        bpy.context.view_layer.objects.active = None
         
         if self._parent.children:
             print("delete the children!")
             for child in self._parent.children:
-                child.select = True    
+                child.select_set(state=True)    
             bpy.ops.object.delete()
             
-        self._parent.select = True
-        bpy.context.scene.objects.active = self._parent
+        self._parent.select_set(state=True)
+        bpy.context.view_layer.objects.active = self._parent
 
         filepath = None
         if self.filepath:
@@ -1130,8 +1128,8 @@ class ImportCSV(Operator, ImportHelper):
                 visualization[i].parent = self._parent
                 visualization[i].matrix_parent_inverse = self._parent.matrix_world.inverted()
 
-        bpy.context.scene.objects.active = self._parent
-        self._parent.select = True
+        bpy.context.view_layer.objects.active = self._parent
+        self._parent.select_set(state=True)
         w.cursor_set('DEFAULT')        
         return {'FINISHED'}
     
@@ -1141,7 +1139,7 @@ class ImportCSV(Operator, ImportHelper):
             self._parent = bpy.context.active_object
         else:
             bpy.ops.object.select_all(action='DESELECT')
-            bpy.context.scene.objects.active = None        
+            bpy.context.view_layer.objects.active = None        
             bpy.ops.object.add(radius=0.25, location=(0,0,0))
             bpy.context.active_object.visualization = True
             bpy.context.active_object.name = 'VisualizationEmpty'
@@ -1170,11 +1168,11 @@ class AddVisualization(Operator):
 
     def execute(self, context):
         bpy.ops.object.select_all(action='DESELECT')
-        bpy.context.scene.objects.active = None        
+        bpy.context.view_layer.objects.active = None        
         bpy.ops.object.add(radius=0.25, location=(0,0,0))
         ob = bpy.context.active_object
         ob.visualization = True
-        ob.select = True
+        ob.select_set(state=True)
         ob.name = 'VisualizationEmpty'        
         return {'FINISHED'}
         
@@ -1226,8 +1224,8 @@ classes = (
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
-    bpy.types.INFO_MT_file_import.append(menu_func_import)
-    bpy.types.INFO_MT_add.append(menu_func_add)    
+    bpy.types.TOPBAR_MT_file_import.append(menu_func_import)
+    bpy.types.VIEW3D_MT_add.append(menu_func_add)    
     bpy.types.Object.import_csv = PointerProperty(type=ImportCSVProperties)
     bpy.types.Object.visualization = BoolProperty(
         name="Visualization Parent",
@@ -1243,7 +1241,7 @@ def unregister():
     del bpy.types.Objects.visualization
     del bpy.types.Objects.vis_data
     
-    bpy.types.INFO_MT_file_import.remove(menu_func_import)
+    bpy.types.TOPBAR_MT_file_import.remove(menu_func_import)
 
 if __name__ == "__main__":
     register()
