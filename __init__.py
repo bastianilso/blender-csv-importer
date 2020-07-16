@@ -963,7 +963,7 @@ class VisualizationProperties(PropertyGroup):
     use_animate = BoolProperty(
             name="Animate",
             description="Animate the data",
-            default=True,
+            default=False,
             )
             
     column = IntProperty(
